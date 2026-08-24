@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#06061a" />
+    <title>AI Warrior Wall of Pledging — Instructor</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/css/jrpg.css" />
+    <link rel="stylesheet" href="/css/wall.css" />
+  </head>
+  <body>
+    <main class="stage stage--wide">
+      <header class="wall-head">
+        <h1><img class="title-icon" src="/sword.svg" alt="" /> AI WARRIOR WALL <img class="title-icon" src="/sword.svg" alt="" /><small>OF PLEDGING</small></h1>
+        <div class="session-name">
+          <input id="title" type="text" maxlength="60" aria-label="Class name" />
+          <button id="save-title" class="btn--ghost btn--sm">SAVE</button>
+        </div>
+        <div class="stat"><b id="count">0</b><span>WARRIORS</span></div>
+        <button id="mute" class="btn--ghost btn--sm" data-silent>SOUND: ON</button>
+        <div class="wall-actions">
+          <a class="btn btn--primary btn--sm" href="/projector" target="_blank" rel="noopener">
+            PROJECTOR
+          </a>
+          <a class="btn btn--ghost btn--sm" id="zip" href="/api/download/all.zip">⬇ ALL .ZIP</a>
+          <button id="new-session" class="btn--ghost btn--sm">NEW SESSION</button>
+          <button id="clear" class="btn--danger btn--sm">CLEAR</button>
+        </div>
+      </header>
+
+      <section class="window">
+        <span class="window-title">JOIN THE PARTY</span>
+        <div class="join">
+          <img id="qr" alt="QR code to the student page" />
+          <div>
+            <p class="join-url" id="join-url">…</p>
+            <p class="hint">
+              Have students scan the QR code or type this link — their phone must be on the same
+              Wi-Fi as this machine.
+            </p>
+            <div class="row" style="margin-top: 10px">
+              <button id="copy" class="btn--ghost btn--sm">COPY LINK</button>
+              <button id="fullscreen-qr" class="btn--ghost btn--sm">ENLARGE QR</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="window window--flat">
+        <span class="window-title">PARTY MEMBERS</span>
+        <div id="roster" class="roster"></div>
+        <div id="empty" class="empty-state">
+          <h2 class="blink">WAITING FOR CHALLENGERS…</h2>
+          <p>Cards appear here the moment students send them.</p>
+        </div>
+      </section>
+    </main>
+
+    <dialog id="qr-modal" class="window window--gold">
+      <div style="display: grid; place-items: center; gap: 16px">
+        <img id="qr-big" alt="QR code" style="width: min(70vh, 70vw); image-rendering: pixelated" />
+        <p class="join-url" id="join-url-big"></p>
+        <button id="close-qr" class="btn--ghost">CLOSE</button>
+      </div>
+    </dialog>
+
+    <script type="module" src="/js/wall.js"></script>
+  </body>
+</html>

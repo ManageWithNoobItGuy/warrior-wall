@@ -1,0 +1,48 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ai-warrior-wall-of-pledging",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // The student pages are plain static files. Serving them from the asset
+  // pipeline keeps them off the Worker's request budget entirely; only the
+  // instructor pages run through the Worker so the passcode cannot be skipped
+  // by requesting the .html file directly.
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/wall", "/wall.html", "/projector", "/projector.html"]
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "warrior-wall",
+      "database_id": "ecf07a9f-f735-4913-bde3-af9297838a7f"
+    }
+  ],
+
+  "r2_buckets": [
+    {
+      "binding": "CARDS",
+      "bucket_name": "warrior-wall-cards"
+    }
+  ],
+
+  "durable_objects": {
+    "bindings": [{ "name": "WALL_HUB", "class_name": "WallHub" }]
+  },
+
+  // SQLite-backed is the only kind the Workers Free plan can create.
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["WallHub"] }],
+
+  "vars": {
+    "AVATAR_LIMIT": "3",
+    // Protects the API key without punishing a classroom, where every student
+    // shares one NAT address and a per-IP cap would lock the room out.
+    "AVATAR_SESSION_LIMIT": "150"
+  },
+
+  "observability": { "enabled": true }
+}

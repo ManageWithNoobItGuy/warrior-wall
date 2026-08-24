@@ -1,0 +1,584 @@
+import { api, toast, sfx, wireSounds } from './ui.js';
+import {
+  renderPoster,
+  ensureFonts,
+  loadImage,
+  scaleCanvas,
+  canvasToBlob,
+  POSTER_W,
+} from './poster.js';
+
+const TAKEAWAY_COUNT = 3; // boxes offered
+const TAKEAWAY_MIN = 1; // boxes that must be filled
+const ACTION_COUNT = 3;
+const MAX_CHARS = 140;
+
+const steps = [...document.querySelectorAll('.step')];
+const dots = document.getElementById('steps');
+const sessionLabel = document.getElementById('session-label');
+
+const state = {
+  step: 0,
+  session: { title: 'AI CLASS' },
+  photo: null, // canvas or image element, full quality for the poster
+  posterFull: null, // Blob, full resolution, for download
+  posterSmall: null, // Blob, display copy for the wall
+  previewUrl: null,
+  avatar: null, // AI-generated portrait, once summoned
+  useAvatar: false,
+  job: null,
+  avatarConfig: null, // { enabled, limit, jobs[] } from the server
+  remaining: 0,
+  generating: false,
+};
+
+// ------------------------------------------------------------------ bootstrap
+
+wireSounds();
+ensureFonts();
+buildEntries();
+renderDots();
+
+api('/api/state')
+  .then((data) => {
+    state.session = data.session;
+    sessionLabel.textContent = `QUEST: ${data.session.title.toUpperCase()}`;
+    state.avatarConfig = data.avatar;
+    state.remaining = data.avatar?.limit ?? 0;
+    renderClasses();
+    refreshSummon();
+  })
+  .catch(() => {
+    sessionLabel.textContent = 'QUEST: OFFLINE';
+  });
+
+// ------------------------------------------------------------------ stepper
+
+function renderDots() {
+  dots.innerHTML = '';
+  for (let i = 0; i < 5; i++) {
+    const dot = document.createElement('i');
+    if (i < state.step) dot.className = 'done';
+    if (i === state.step) dot.className = 'current';
+    dots.append(dot);
+  }
+}
+
+function show(index) {
+  state.step = index;
+  steps.forEach((section) => {
+    section.hidden = Number(section.dataset.step) !== index;
+  });
+  renderDots();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+document.addEventListener('click', async (event) => {
+  if (event.target.closest('[data-next]')) {
+    if (await validate(state.step)) show(state.step + 1);
+  }
+  if (event.target.closest('[data-back]')) {
+    sfx.cancel();
+    show(Math.max(0, state.step - 1));
+  }
+});
+
+async function validate(step) {
+  if (step === 0) {
+    const name = value('name');
+    const id = value('student-id');
+    if (!name || !id) {
+      fail('Enter your name and student ID first.');
+      return false;
+    }
+    refreshQuota(); // the student id keys their avatar allowance
+    return true;
+  }
+
+  if (step === 1) {
+    if (!state.photo) {
+      sfx.error();
+      return confirm('No photo yet — skip it? Your card will show NO PHOTO.');
+    }
+    return true;
+  }
+
+  if (step === 2) {
+    if (collect('takeaways').length < TAKEAWAY_MIN) {
+      fail('Write down at least 1 thing you learned.');
+      return false;
+    }
+    return true;
+  }
+
+  if (step === 3) {
+    if (!collect('actions').length) {
+      fail('Pledge at least 1 action.');
+      return false;
+    }
+    await buildPreview();
+    return true;
+  }
+
+  return true;
+}
+
+function fail(message) {
+  sfx.error();
+  toast(message, 'bad');
+}
+
+function value(id) {
+  return document.getElementById(id).value.trim();
+}
+
+function collect(containerId) {
+  return [...document.querySelectorAll(`#${containerId} textarea`)]
+    .map((el) => el.value.replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+}
+
+// ------------------------------------------------------------------ entries
+
+function buildEntries() {
+  const specs = [
+    { id: 'takeaways', count: TAKEAWAY_COUNT, cls: '', required: TAKEAWAY_MIN },
+    { id: 'actions', count: ACTION_COUNT, cls: 'entry--action', required: 1 },
+  ];
+
+  for (const spec of specs) {
+    const host = document.getElementById(spec.id);
+    for (let i = 0; i < spec.count; i++) {
+      const wrap = document.createElement('div');
+      wrap.className = `entry ${spec.cls}`;
+      wrap.innerHTML = `
+        <div class="entry-head">
+          <span class="num">${i + 1}</span>
+          ${i >= spec.required ? '<span class="optional">OPTIONAL</span>' : ''}
+          <span class="spacer"></span>
+          <span class="counter">0/${MAX_CHARS}</span>
+        </div>
+        <textarea maxlength="${MAX_CHARS}" rows="2" placeholder="${
+          spec.id === 'takeaways' ? 'What you learned…' : 'An action I commit to…'
+        }"></textarea>`;
+      const textarea = wrap.querySelector('textarea');
+      const counter = wrap.querySelector('.counter');
+      textarea.addEventListener('input', () => {
+        counter.textContent = `${textarea.value.length}/${MAX_CHARS}`;
+        counter.classList.toggle('over', textarea.value.length >= MAX_CHARS);
+      });
+      host.append(wrap);
+    }
+  }
+}
+
+// ------------------------------------------------------------------ camera
+
+const video = document.getElementById('video');
+const shot = document.getElementById('shot');
+const empty = document.getElementById('portrait-empty');
+const startBtn = document.getElementById('camera-start');
+const snapBtn = document.getElementById('camera-snap');
+const retakeBtn = document.getElementById('camera-retake');
+const fileInput = document.getElementById('file');
+const hint = document.getElementById('camera-hint');
+let stream;
+
+startBtn.addEventListener('click', async () => {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    hint.textContent =
+      'This browser cannot open the camera in-page (needs https or localhost) — use “CHOOSE PHOTO” to shoot with your phone camera instead.';
+    fail('Camera unavailable in-page — use “CHOOSE PHOTO”.');
+    return;
+  }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 1280 } },
+      audio: false,
+    });
+    video.srcObject = stream;
+    video.hidden = false;
+    shot.hidden = true;
+    empty.hidden = true;
+    startBtn.hidden = true;
+    snapBtn.hidden = false;
+    retakeBtn.hidden = true;
+  } catch (err) {
+    hint.textContent = `Could not open the camera (${err.name}) — use “CHOOSE PHOTO” to shoot with your phone camera instead.`;
+    fail('Could not open the camera — use “CHOOSE PHOTO”.');
+  }
+});
+
+snapBtn.addEventListener('click', () => {
+  const side = Math.min(video.videoWidth, video.videoHeight);
+  if (!side) return fail('Camera is not ready yet — try again.');
+  const canvas = document.createElement('canvas');
+  canvas.width = side;
+  canvas.height = side;
+  const ctx = canvas.getContext('2d');
+  // Mirror to match the preview the student was framing themselves in.
+  ctx.translate(side, 0);
+  ctx.scale(-1, 1);
+  ctx.drawImage(
+    video,
+    (video.videoWidth - side) / 2,
+    (video.videoHeight - side) / 2,
+    side,
+    side,
+    0,
+    0,
+    side,
+    side,
+  );
+  usePhoto(canvas);
+  stopCamera();
+  sfx.confirm();
+});
+
+retakeBtn.addEventListener('click', () => {
+  state.photo = null;
+  state.avatar = null;
+  state.useAvatar = false;
+  shot.hidden = true;
+  empty.hidden = false;
+  sourceToggle.hidden = true;
+  retakeBtn.hidden = true;
+  startBtn.hidden = false;
+  refreshSummon();
+});
+
+fileInput.addEventListener('change', async () => {
+  const file = fileInput.files?.[0];
+  if (!file) return;
+  try {
+    const img = await loadImage(URL.createObjectURL(file));
+    stopCamera();
+    usePhoto(img);
+    sfx.confirm();
+  } catch {
+    fail('Could not read that image file.');
+  } finally {
+    fileInput.value = '';
+  }
+});
+
+function stopCamera() {
+  stream?.getTracks().forEach((track) => track.stop());
+  stream = null;
+  video.hidden = true;
+  snapBtn.hidden = true;
+}
+
+function usePhoto(source) {
+  state.photo = source;
+  state.avatar = null;
+  state.useAvatar = false;
+  sourceToggle.hidden = true;
+  drawToBox(activeSource());
+  startBtn.hidden = true;
+  retakeBtn.hidden = false;
+  refreshSummon();
+}
+
+/** Centre-crops whatever is currently chosen into the framed preview box. */
+function drawToBox(source) {
+  const side = 512;
+  shot.width = side;
+  shot.height = side;
+  const ctx = shot.getContext('2d');
+  const w = source.naturalWidth || source.width || source.videoWidth;
+  const h = source.naturalHeight || source.height || source.videoHeight;
+  const crop = Math.min(w, h);
+  ctx.drawImage(source, (w - crop) / 2, (h - crop) / 2, crop, crop, 0, 0, side, side);
+  shot.hidden = false;
+  empty.hidden = true;
+}
+
+function activeSource() {
+  return state.useAvatar && state.avatar ? state.avatar : state.photo;
+}
+
+/** Square, downscaled copy of whichever picture is in play. */
+function squareCanvas(source, size) {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const w = source.naturalWidth || source.width;
+  const h = source.naturalHeight || source.height;
+  const crop = Math.min(w, h);
+  canvas
+    .getContext('2d')
+    .drawImage(source, (w - crop) / 2, (h - crop) / 2, crop, crop, 0, 0, size, size);
+  return canvas;
+}
+
+/** Data URL form — only the avatar request still needs one, and it is small. */
+function encodeSource(source, size, quality = 0.9) {
+  return squareCanvas(source, size).toDataURL('image/jpeg', quality);
+}
+
+// ------------------------------------------------------------- AI avatar
+
+const summon = document.getElementById('summon');
+const classGrid = document.getElementById('class-grid');
+const generateBtn = document.getElementById('generate');
+const quotaEl = document.getElementById('quota');
+const summonNote = document.getElementById('summon-note');
+const sourceToggle = document.getElementById('source-toggle');
+const usePhotoBtn = document.getElementById('use-photo');
+const useAvatarBtn = document.getElementById('use-avatar');
+
+function jobById(id) {
+  return state.avatarConfig?.jobs.find((job) => job.id === id) ?? null;
+}
+
+function renderClasses() {
+  const config = state.avatarConfig;
+  if (!config?.enabled) return;
+  summon.hidden = false;
+  classGrid.innerHTML = config.jobs
+    .map(
+      (job) => `
+      <button type="button" class="class-btn" data-job="${job.id}">
+        <i style="background:${job.accent}"></i>
+        <b>${job.label}</b>
+        <small>${job.tagline}</small>
+      </button>`,
+    )
+    .join('');
+}
+
+classGrid.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-job]');
+  if (!button) return;
+  state.job = button.dataset.job;
+  [...classGrid.children].forEach((el) => el.classList.toggle('selected', el === button));
+  refreshSummon();
+});
+
+function refreshSummon() {
+  if (!state.avatarConfig?.enabled) return;
+  const ready = Boolean(state.photo && state.job) && state.remaining > 0;
+  generateBtn.disabled = !ready || state.generating;
+  quotaEl.textContent = `${state.remaining} / ${state.avatarConfig.limit} LEFT`;
+  quotaEl.classList.toggle('empty', state.remaining <= 0);
+
+  if (state.generating) return;
+  if (state.remaining <= 0) {
+    summonNote.textContent = 'No summons left — your real photo works great too.';
+  } else if (!state.photo) {
+    summonNote.textContent = 'Take a photo first, then pick a class.';
+  } else if (!state.job) {
+    summonNote.textContent = 'Pick the class you want to be.';
+  } else {
+    summonNote.textContent = 'Takes about 15–25 seconds.';
+  }
+}
+
+async function refreshQuota() {
+  if (!state.avatarConfig?.enabled) return;
+  const studentId = value('student-id');
+  if (!studentId) return;
+  try {
+    const quota = await api(`/api/avatar/quota?studentId=${encodeURIComponent(studentId)}`);
+    state.remaining = quota.remaining;
+  } catch {
+    /* quota is advisory on the client; the server is the one that enforces it */
+  }
+  refreshSummon();
+}
+
+generateBtn.addEventListener('click', async () => {
+  if (!state.photo || !state.job) return;
+  state.generating = true;
+  refreshSummon();
+  generateBtn.disabled = true;
+  generateBtn.classList.add('casting');
+
+  const label = jobById(state.job)?.label ?? 'AVATAR';
+  generateBtn.textContent = `SUMMONING ${label}…`;
+  summonNote.textContent = 'The AI is painting your character — keep this page open…';
+
+  try {
+    const result = await api('/api/avatar', {
+      method: 'POST',
+      body: JSON.stringify({
+        studentId: value('student-id'),
+        job: state.job,
+        photo: encodeSource(state.photo, 768),
+      }),
+    });
+    state.avatar = await loadImage(result.image);
+    state.remaining = result.remaining;
+    state.useAvatar = true;
+    setSourceButtons();
+    sourceToggle.hidden = false;
+    drawToBox(state.avatar);
+    sfx.fanfare();
+    toast(`Your ${label} is ready!`);
+  } catch (err) {
+    if (err.data?.remaining !== undefined) state.remaining = err.data.remaining;
+    fail(avatarErrorMessage(err));
+  } finally {
+    state.generating = false;
+    generateBtn.classList.remove('casting');
+    generateBtn.textContent = 'SUMMON AVATAR';
+    refreshSummon();
+  }
+});
+
+function avatarErrorMessage(err) {
+  switch (err.code) {
+    case 'quota':
+      return 'You have used all your avatar summons.';
+    case 'busy':
+      return 'Too many summons right now — wait a moment and try again.';
+    case 'exhausted':
+      return 'AI image credits have run out — let your instructor know. Your real photo still works.';
+    case 'network':
+      return 'Connection dropped while generating — try again (this did not use a summon).';
+    case 'timeout':
+      return 'That took too long — try again.';
+    case 'no_image':
+      return 'The AI could not generate an image — retake the photo with your face clearly visible.';
+    case 'no_key':
+      return 'Avatar generation is not configured on the server.';
+    default:
+      return `Generation failed: ${err.message}`;
+  }
+}
+
+function setSourceButtons() {
+  usePhotoBtn.className = state.useAvatar ? 'btn--ghost btn--sm' : 'btn--sm btn--primary';
+  useAvatarBtn.className = state.useAvatar ? 'btn--sm btn--primary' : 'btn--ghost btn--sm';
+}
+
+usePhotoBtn.addEventListener('click', () => {
+  if (!state.photo) return;
+  state.useAvatar = false;
+  setSourceButtons();
+  drawToBox(state.photo);
+});
+
+useAvatarBtn.addEventListener('click', () => {
+  if (!state.avatar) return;
+  state.useAvatar = true;
+  setSourceButtons();
+  drawToBox(state.avatar);
+});
+
+// ------------------------------------------------------------------ preview
+
+async function buildPreview() {
+  await ensureFonts();
+  const canvas = renderPoster({
+    name: value('name'),
+    studentId: value('student-id'),
+    takeaways: collect('takeaways'),
+    actions: collect('actions'),
+    photo: activeSource(),
+    job: state.useAvatar ? jobById(state.job) : null,
+    title: state.session.title,
+    // A raw photo gets posterised so it belongs inside the pixel frame; an AI
+    // avatar is already stylised and posterising it twice only muddies the face.
+    pixelate: !state.useAvatar,
+  });
+  state.posterFull = await canvasToBlob(canvas);
+  state.posterSmall = await canvasToBlob(scaleCanvas(canvas, POSTER_W));
+
+  if (state.previewUrl) URL.revokeObjectURL(state.previewUrl);
+  state.previewUrl = URL.createObjectURL(state.posterSmall);
+  document.getElementById('preview').src = state.previewUrl;
+}
+
+// ------------------------------------------------------------------ submit
+
+const submitBtn = document.getElementById('submit');
+
+submitBtn.addEventListener('click', async () => {
+  if (!state.posterFull || !state.posterSmall) {
+    return fail('The card is not built yet — go back a step and return.');
+  }
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'SENDING…';
+  try {
+    // 1. metadata only — a small JSON body
+    const { id } = await api('/api/posters', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: value('name'),
+        studentId: value('student-id'),
+        takeaways: collect('takeaways'),
+        actions: collect('actions'),
+        job: state.useAvatar ? state.job : null,
+      }),
+    });
+
+    // 2. the images as raw bytes. The display copy goes last: the server
+    //    publishes the card to the wall the moment it arrives, so everything
+    //    else is already in place by then.
+    await putImage(id, 'full', state.posterFull);
+    if (activeSource()) {
+      await putImage(id, 'photo', await canvasToBlob(squareCanvas(activeSource(), 400), 'image/jpeg', 0.82));
+    }
+    await putImage(id, 'display', state.posterSmall);
+
+    document.getElementById('done-preview').src = `/p/${id}.png`;
+    const download = document.getElementById('download');
+    download.href = `/p/full/${id}.png`;
+    download.setAttribute('download', `warrior-${value('student-id')}.png`);
+    document.getElementById('done-message').textContent =
+      `${value('name')} is on the wall. Keep the card as a memento!`;
+    setupShare(`/p/full/${id}.png`);
+    show(5);
+    sfx.fanfare();
+  } catch (err) {
+    fail(err.message);
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'PLEDGE IT';
+  }
+});
+
+async function putImage(id, variant, blob) {
+  const res = await fetch(`/api/posters/${id}/image/${variant}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': blob.type || 'application/octet-stream' },
+    body: blob,
+  });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}));
+    throw new Error(detail.error || `upload failed (${variant})`);
+  }
+}
+
+function setupShare(url) {
+  const shareBtn = document.getElementById('share');
+  if (!navigator.canShare) return;
+  shareBtn.hidden = false;
+  shareBtn.onclick = async () => {
+    try {
+      const blob = await (await fetch(url)).blob();
+      const file = new File([blob], `warrior-${value('student-id')}.png`, { type: 'image/png' });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'Warrior Card' });
+      }
+    } catch {
+      /* the user dismissing the share sheet is not an error worth shouting about */
+    }
+  };
+}
+
+document.getElementById('again').addEventListener('click', () => {
+  window.location.reload();
+});
+
+// ------------------------------------------------------------------ sound toggle
+
+const muteBtn = document.getElementById('mute');
+muteBtn.textContent = sfx.isMuted() ? 'SOUND: OFF' : 'SOUND: ON';
+muteBtn.addEventListener('click', () => {
+  muteBtn.textContent = sfx.toggle() ? 'SOUND: OFF' : 'SOUND: ON';
+});
+
+window.addEventListener('pagehide', stopCamera);

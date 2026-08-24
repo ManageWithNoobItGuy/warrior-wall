@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#06061a" />
+    <title>AI Warrior Wall of Pledging — Create your card</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/css/jrpg.css" />
+    <link rel="stylesheet" href="/css/student.css" />
+  </head>
+  <body>
+    <main class="stage">
+      <header class="quest-head">
+        <h1>
+          <img class="title-icon" src="/sword.svg" alt="" />
+          AI WARRIOR WALL
+          <img class="title-icon" src="/sword.svg" alt="" />
+          <small>OF PLEDGING</small>
+        </h1>
+        <p class="tiny" id="session-label">LOADING QUEST…</p>
+        <div class="steps" id="steps" aria-hidden="true"></div>
+      </header>
+
+      <!-- ---------------------------------------------------- STEP 1 -->
+      <section class="window step" data-step="0">
+        <span class="window-title">PLAYER NAME</span>
+        <div class="stack">
+          <p class="speech">Welcome, warrior! Before you set out, tell us who you are.</p>
+          <div>
+            <label for="name">NAME</label>
+            <input id="name" type="text" maxlength="40" autocomplete="name" placeholder="e.g. Nimmiw" />
+          </div>
+          <div>
+            <label for="student-id">STUDENT ID</label>
+            <input
+              id="student-id"
+              type="text"
+              maxlength="24"
+              inputmode="latin"
+              autocomplete="off"
+              placeholder="e.g. 6410123456"
+            />
+          </div>
+        </div>
+        <div class="row nav">
+          <span class="spacer"></span>
+          <button class="btn--primary" data-next>NEXT ▶</button>
+        </div>
+      </section>
+
+      <!-- ---------------------------------------------------- STEP 2 -->
+      <section class="window step" data-step="1" hidden>
+        <span class="window-title">PORTRAIT</span>
+        <div class="stack">
+          <p class="speech">Take a photo of yourself for your card.</p>
+
+          <div class="portrait-box">
+            <video id="video" playsinline autoplay muted hidden></video>
+            <canvas id="shot" hidden></canvas>
+            <div id="portrait-empty" class="portrait-empty">
+              <span class="tiny">NO SIGNAL</span>
+            </div>
+          </div>
+
+          <div class="row">
+            <button id="camera-start" class="btn--ghost">OPEN CAMERA</button>
+            <button id="camera-snap" class="btn--primary" hidden>SNAP!</button>
+            <button id="camera-retake" class="btn--ghost" hidden>RETAKE</button>
+            <label class="btn btn--ghost file-btn">
+              CHOOSE PHOTO
+              <input id="file" type="file" accept="image/*" capture="user" hidden />
+            </label>
+          </div>
+
+          <p class="hint" id="camera-hint">
+            If the camera does not open, tap “CHOOSE PHOTO” — you can shoot with your phone’s own
+            camera from there.
+          </p>
+
+          <!-- AI avatar -->
+          <div class="summon" id="summon" hidden>
+            <div class="summon-head">
+              <span class="field-label">CHOOSE YOUR CLASS</span>
+              <span class="quota" id="quota">— / —</span>
+            </div>
+            <p class="hint">Pick a class and let AI paint you as a JRPG character.</p>
+            <div class="class-grid" id="class-grid"></div>
+            <button id="generate" class="btn--primary summon-btn" disabled>SUMMON AVATAR</button>
+            <p class="hint" id="summon-note">Takes about 15–25 seconds.</p>
+
+            <div class="source-toggle" id="source-toggle" hidden>
+              <span class="field-label">PICTURE ON YOUR CARD</span>
+              <div class="row">
+                <button id="use-photo" class="btn--ghost btn--sm">REAL PHOTO</button>
+                <button id="use-avatar" class="btn--sm btn--primary">AI AVATAR</button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+        <div class="row nav">
+          <button class="btn--ghost" data-back>◀ BACK</button>
+          <span class="spacer"></span>
+          <button class="btn--primary" data-next>NEXT ▶</button>
+        </div>
+      </section>
+
+      <!-- ---------------------------------------------------- STEP 3 -->
+      <section class="window step" data-step="2" hidden>
+        <span class="window-title">KEY TAKEAWAYS</span>
+        <div class="stack">
+          <p class="speech">What did you learn today? Add 1–3.</p>
+          <div id="takeaways"></div>
+        </div>
+        <div class="row nav">
+          <button class="btn--ghost" data-back>◀ BACK</button>
+          <span class="spacer"></span>
+          <button class="btn--primary" data-next>NEXT ▶</button>
+        </div>
+      </section>
+
+      <!-- ---------------------------------------------------- STEP 4 -->
+      <section class="window step" data-step="3" hidden>
+        <span class="window-title">MY PLEDGE</span>
+        <div class="stack">
+          <p class="speech">After this class, I commit to… Pledge 1–3 actions.</p>
+          <div id="actions"></div>
+        </div>
+        <div class="row nav">
+          <button class="btn--ghost" data-back>◀ BACK</button>
+          <span class="spacer"></span>
+          <button class="btn--primary" data-next>BUILD CARD ▶</button>
+        </div>
+      </section>
+
+      <!-- ---------------------------------------------------- STEP 5 -->
+      <section class="window step" data-step="4" hidden>
+        <span class="window-title">CONFIRM</span>
+        <div class="stack">
+          <p class="speech">Here is your card. Happy with it? Send it to the wall.</p>
+          <div class="preview-wrap">
+            <img id="preview" alt="Preview of your warrior card" />
+          </div>
+        </div>
+        <div class="row nav">
+          <button class="btn--ghost" data-back>◀ EDIT</button>
+          <span class="spacer"></span>
+          <button id="submit" class="btn--primary">PLEDGE IT</button>
+        </div>
+      </section>
+
+      <!-- ---------------------------------------------------- DONE -->
+      <section class="window window--gold step" data-step="5" hidden>
+        <span class="window-title">QUEST COMPLETE</span>
+        <div class="stack">
+          <h2 class="victory">WELCOME TO THE WALL</h2>
+          <p class="speech" id="done-message"></p>
+          <div class="preview-wrap">
+            <img id="done-preview" alt="Your warrior card" />
+          </div>
+          <div class="row">
+            <a id="download" class="btn btn--primary" download>⬇ DOWNLOAD CARD</a>
+            <button id="share" class="btn--ghost" hidden>SHARE</button>
+            <button id="again" class="btn--ghost">NEXT PLAYER</button>
+          </div>
+          <p class="hint">On a phone you can also press and hold the picture to save it.</p>
+        </div>
+      </section>
+
+      <footer class="row foot">
+        <button id="mute" class="btn--ghost btn--sm" data-silent>SOUND: ON</button>
+        <span class="spacer"></span>
+        <span class="tiny">v1.1</span>
+      </footer>
+    </main>
+
+    <script type="module" src="/js/student.js"></script>
+  </body>
+</html>

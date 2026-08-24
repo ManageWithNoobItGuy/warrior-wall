@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#06061a" />
+    <title>AI Warrior Wall of Pledging — Projector</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/css/jrpg.css" />
+    <link rel="stylesheet" href="/css/wall.css" />
+  </head>
+  <body class="projector">
+    <div id="screen"></div>
+
+    <template id="tpl-featured">
+      <div class="proj">
+        <div class="proj-portrait">
+          <img data-poster alt="" />
+        </div>
+        <div class="proj-panel window">
+          <span class="window-title">THE PLEDGE</span>
+          <div class="proj-name" data-name></div>
+          <div class="proj-id" data-id></div>
+          <div class="proj-heading">▶ WHAT I WILL DO NEXT</div>
+          <ul class="proj-list" data-actions></ul>
+          <div class="proj-takeaways" data-takeaways></div>
+        </div>
+      </div>
+    </template>
+
+    <template id="tpl-attract">
+      <div class="attract">
+        <h1><img class="title-icon" src="/sword.svg" alt="" /> AI WARRIOR WALL <img class="title-icon" src="/sword.svg" alt="" /><small>OF PLEDGING</small></h1>
+        <div class="attract-strip" data-strip></div>
+        <p class="press blink">PRESS ← → TO BROWSE · SELECT A WARRIOR ON THE WALL</p>
+      </div>
+    </template>
+
+    <script type="module" src="/js/projector.js"></script>
+  </body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "name": "ai-warrior-wall-of-pledging",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "description": "JRPG-themed class wall: students submit key takeaways and pledge next actions, the system generates a character card, and the instructor projects them.",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  }
+}

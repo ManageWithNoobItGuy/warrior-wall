@@ -1,0 +1,482 @@
+/* ============================================================
+   WARRIOR WALL — 24-bit JRPG interface kit
+   ============================================================ */
+
+@font-face {
+  font-family: 'Press Start 2P';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('/fonts/press-start-2p-latin.woff2') format('woff2');
+  /* Latin only. Arrows, stars and ⚔ are not in this face, and claiming them
+     here would render them as tofu instead of falling back to a system font. */
+  unicode-range: U+0000-00FF, U+2000-206F, U+2122;
+}
+
+@font-face {
+  font-family: 'Noto Sans Thai';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/noto-sans-thai-thai.woff2') format('woff2');
+  unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+}
+
+@font-face {
+  font-family: 'Noto Sans Thai';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/noto-sans-thai-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F,
+    U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root {
+  --void: #06061a;
+  --night: #0d0d2b;
+  --deep: #16164a;
+  --window-a: #2a2a80;
+  --window-b: #12123a;
+  --ink: #f4efe2;
+  --ink-dim: #a9a6d8;
+  --gold: #ffd75e;
+  --amber: #f0952f;
+  --cyan: #63e7ff;
+  --magenta: #ff6ec7;
+  --leaf: #7cf07c;
+  --danger: #ff5f6d;
+  --edge: #04040e;
+
+  --font-pixel: 'Press Start 2P', 'Noto Sans Thai', ui-monospace, monospace;
+  --font-body: 'Noto Sans Thai', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  --step: 4px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Author rules like `button { display: inline-flex }` outrank the UA sheet's
+   `[hidden] { display: none }`, which would quietly break every toggle here. */
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100vh;
+  background-color: var(--void);
+  background-image:
+    radial-gradient(1.5px 1.5px at 12% 18%, rgba(255, 255, 255, 0.55) 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 78% 8%, rgba(190, 220, 255, 0.5) 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 33% 72%, rgba(255, 235, 190, 0.45) 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 88% 62%, rgba(255, 255, 255, 0.4) 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 58% 38%, rgba(180, 200, 255, 0.4) 50%, transparent 51%),
+    radial-gradient(ellipse 120% 80% at 50% 0%, #1d1d5e 0%, transparent 60%),
+    linear-gradient(180deg, #0b0b28 0%, #06061a 100%);
+  background-attachment: fixed;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.65;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* CRT scanlines — kept faint so projected text stays readable */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.16) 0 1px,
+    rgba(0, 0, 0, 0) 1px 3px
+  );
+}
+
+body.no-scanlines::after {
+  display: none;
+}
+
+/**
+ * The scanline overlay is page dressing and it sits above everything at z-index
+ * 9000. Over dark chrome you cannot see it, but across a bright portrait it
+ * stripes the face — and across a QR code it costs scan reliability. Artwork and
+ * QR codes therefore paint above it.
+ */
+.portrait-box,
+.preview-wrap img,
+.card img,
+.proj-portrait img,
+.attract-strip img,
+.join img,
+#qr-big {
+  position: relative;
+  z-index: 9001;
+}
+
+/* ...which would otherwise bury the wall badge under its own card image. */
+.featured-flag {
+  z-index: 9002;
+}
+
+/* --------------------------------------------------------- typography */
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-pixel);
+  font-weight: 400;
+  line-height: 1.5;
+  margin: 0;
+  text-shadow: 0 3px 0 var(--edge);
+}
+
+h1 {
+  font-size: clamp(15px, 4.2vw, 26px);
+  color: var(--gold);
+  letter-spacing: 0.02em;
+}
+
+/* Second line of the wordmark — "OF PLEDGING" under "AI WARRIOR WALL". */
+h1 small {
+  display: block;
+  margin-top: 8px;
+  font-size: 0.62em;
+  color: var(--cyan);
+  letter-spacing: 0.14em;
+  text-align: center;
+}
+
+h2 {
+  font-size: clamp(11px, 3vw, 15px);
+  color: var(--cyan);
+}
+
+h3 {
+  font-size: clamp(10px, 2.6vw, 12px);
+  color: var(--ink);
+}
+
+.pixel {
+  font-family: var(--font-pixel);
+}
+
+/* Pixel sword flanking the wordmark — an SVG, because no font we ship has a
+   glyph for it and a fallback emoji would break the 24-bit look. */
+.title-icon {
+  width: 1.3em;
+  height: 1.3em;
+  vertical-align: -0.28em;
+  image-rendering: pixelated;
+}
+
+.dim {
+  color: var(--ink-dim);
+}
+
+.gold {
+  color: var(--gold);
+}
+
+.tiny {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  line-height: 1.9;
+  color: var(--ink-dim);
+}
+
+/* --------------------------------------------------------- window chrome */
+
+.window {
+  position: relative;
+  background: linear-gradient(180deg, var(--window-a) 0%, var(--window-b) 100%);
+  border: var(--step) solid var(--ink);
+  outline: var(--step) solid var(--edge);
+  outline-offset: 0;
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 255, 255, 0.14),
+    inset 0 -14px 28px rgba(0, 0, 0, 0.45),
+    0 0 0 8px rgba(8, 8, 30, 0.55),
+    0 10px 0 8px rgba(0, 0, 0, 0.35);
+  padding: 20px;
+  margin: 12px 0 20px;
+}
+
+.window--flat {
+  background: linear-gradient(180deg, #1a1a52 0%, #0c0c26 100%);
+}
+
+.window--gold {
+  border-color: var(--gold);
+}
+
+/* four corner gems, the classic SNES menu tell */
+.window::before,
+.window::after {
+  content: '';
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background: var(--gold);
+  box-shadow: 0 0 0 2px var(--edge);
+}
+
+.window::before {
+  top: 4px;
+  left: 4px;
+}
+
+.window::after {
+  top: 4px;
+  right: 4px;
+}
+
+.window-title {
+  display: inline-block;
+  position: relative;
+  top: -34px;
+  margin-bottom: -22px;
+  padding: 6px 14px;
+  background: var(--edge);
+  border: 3px solid var(--gold);
+  font-family: var(--font-pixel);
+  font-size: clamp(9px, 2.5vw, 12px);
+  color: var(--gold);
+  text-shadow: 0 2px 0 #000;
+}
+
+/* --------------------------------------------------------- controls */
+
+button,
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 12px 18px;
+  border: 3px solid var(--edge);
+  border-radius: 0;
+  background: linear-gradient(180deg, #3d3daf 0%, #23236b 100%);
+  color: var(--ink);
+  font-family: var(--font-pixel);
+  font-size: clamp(9px, 2.4vw, 12px);
+  line-height: 1.6;
+  text-decoration: none;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.6);
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 255, 255, 0.22),
+    0 5px 0 0 var(--edge);
+  cursor: pointer;
+  transition: transform 0.06s steps(2), filter 0.1s;
+}
+
+button:hover,
+.btn:hover {
+  filter: brightness(1.18);
+}
+
+button:active,
+.btn:active {
+  transform: translateY(4px);
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 255, 255, 0.22),
+    0 1px 0 0 var(--edge);
+}
+
+button:focus-visible,
+.btn:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid var(--cyan);
+  outline-offset: 3px;
+}
+
+button:disabled {
+  filter: grayscale(0.8) brightness(0.7);
+  cursor: not-allowed;
+}
+
+.btn--primary {
+  background: linear-gradient(180deg, #ffd75e 0%, #e08a1e 100%);
+  color: #2a1400;
+  text-shadow: 0 2px 0 rgba(255, 255, 255, 0.35);
+}
+
+.btn--ghost {
+  background: linear-gradient(180deg, #24245e 0%, #14143a 100%);
+  color: var(--ink-dim);
+}
+
+.btn--danger {
+  background: linear-gradient(180deg, #d93a4a 0%, #7d1220 100%);
+}
+
+.btn--sm {
+  min-height: 38px;
+  padding: 8px 12px;
+  font-size: 9px;
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 255, 255, 0.2),
+    0 4px 0 0 var(--edge);
+}
+
+label,
+.field-label {
+  display: block;
+  margin: 0 0 8px;
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--cyan);
+  text-shadow: 0 2px 0 var(--edge);
+}
+
+input[type='text'],
+textarea {
+  width: 100%;
+  padding: 14px;
+  border: 3px solid var(--edge);
+  border-radius: 0;
+  background: #080820;
+  box-shadow: inset 0 0 0 2px rgba(120, 140, 255, 0.28);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 17px;
+  line-height: 1.5;
+  resize: none;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #5a5a92;
+}
+
+.hint {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--ink-dim);
+}
+
+.counter {
+  float: right;
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: var(--ink-dim);
+}
+
+.counter.over {
+  color: var(--danger);
+}
+
+/* --------------------------------------------------------- layout */
+
+.stage {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 16px 120px;
+}
+
+.stage--wide {
+  max-width: 1500px;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.stack > * + * {
+  margin-top: 16px;
+}
+
+/* --------------------------------------------------------- misc bits */
+
+.hp-bar {
+  height: 18px;
+  border: 3px solid var(--edge);
+  background: #08081c;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.hp-bar > i {
+  display: block;
+  height: 100%;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--leaf) 0 8px,
+    #4fbf4f 8px 12px
+  );
+  transition: width 0.3s steps(6);
+}
+
+.badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border: 2px solid var(--edge);
+  background: var(--gold);
+  color: #2a1400;
+  font-family: var(--font-pixel);
+  font-size: 9px;
+}
+
+.blink {
+  animation: blink 1s steps(2, start) infinite;
+}
+
+@keyframes blink {
+  to {
+    opacity: 0.25;
+  }
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 9500;
+  transform: translate(-50%, 140%);
+  max-width: min(92vw, 520px);
+  padding: 14px 18px;
+  border: 3px solid var(--ink);
+  outline: 3px solid var(--edge);
+  background: linear-gradient(180deg, #2a2a80, #12123a);
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  line-height: 1.8;
+  transition: transform 0.25s steps(5);
+}
+
+.toast.show {
+  transform: translate(-50%, 0);
+}
+
+.toast.bad {
+  background: linear-gradient(180deg, #8d1b2a, #45050f);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

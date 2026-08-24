@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#06061a" />
+    <title>Warrior Card</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/css/jrpg.css" />
+    <link rel="stylesheet" href="/css/student.css" />
+  </head>
+  <body>
+    <main class="stage">
+      <header class="quest-head"><h1><img class="title-icon" src="/sword.svg" alt="" /> WARRIOR CARD <img class="title-icon" src="/sword.svg" alt="" /></h1></header>
+      <section class="window window--gold">
+        <span class="window-title" id="who">…</span>
+        <div class="stack">
+          <div class="preview-wrap"><img id="card" alt="Warrior card" /></div>
+          <div class="row">
+            <a id="download" class="btn btn--primary" download>⬇ DOWNLOAD</a>
+            <a class="btn btn--ghost" href="/">MAKE MY OWN CARD</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script type="module">
+      import { api } from '/js/ui.js';
+
+      const id = new URLSearchParams(location.search).get('id');
+      const card = document.getElementById('card');
+      const download = document.getElementById('download');
+
+      if (!id) {
+        document.getElementById('who').textContent = 'NOT FOUND';
+      } else {
+        card.src = `/p/${id}.png`;
+        download.href = `/p/full/${id}.png`;
+        api(`/api/posters/${id}`)
+          .then((poster) => {
+            document.getElementById('who').textContent = poster.name.toUpperCase();
+            download.setAttribute('download', `warrior-${poster.studentId}.png`);
+          })
+          .catch(() => {
+            document.getElementById('who').textContent = 'NOT FOUND';
+          });
+      }
+    </script>
+  </body>
+</html>
