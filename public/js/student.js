@@ -54,6 +54,7 @@ const state = {
 /** How many dots the progress strip shows — one per screen the student walks
  *  through, the completion screen excluded. */
 const STEP_COUNT = 7;
+const ARENA_STEP = 3; // the last step reachable before the battle is over
 
 // ------------------------------------------------------------------ bootstrap
 
@@ -123,9 +124,22 @@ connectEvents({
 
 // ------------------------------------------------------------------ stepper
 
+/**
+ * How many steps to advertise.
+ *
+ * The three pledge steps cannot be reached until the tournament is over, so
+ * until then the run is four steps long and the dots say so. They appear as
+ * soon as the pledge opens — which is also the moment MY PLEDGE ▶ does.
+ */
+function visibleSteps() {
+  if (state.pledged || battleFinished()) return STEP_COUNT;
+  return Math.max(ARENA_STEP + 1, state.step + 1);
+}
+
 function renderDots() {
+  const shown = visibleSteps();
   dots.innerHTML = '';
-  for (let i = 0; i < STEP_COUNT; i++) {
+  for (let i = 0; i < shown; i++) {
     const dot = document.createElement('i');
     if (i < state.step) dot.className = 'done';
     if (i === state.step) dot.className = 'current';
@@ -722,9 +736,10 @@ function applyPledgeState() {
   const done = Boolean(state.pledged);
   const open = battleFinished();
   document.getElementById('to-pledge').hidden = done || !open;
-  document.getElementById('pledge-wait').hidden = done || open;
   document.getElementById('pledged-note').hidden = !done;
   document.getElementById('view-card').hidden = !done;
+  // The run gets longer the moment the pledge opens.
+  renderDots();
 }
 
 document.getElementById('view-card').addEventListener('click', () => {

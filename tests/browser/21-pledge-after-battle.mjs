@@ -17,7 +17,7 @@ const fail=[]; const ok=(c,m)=>{console.log((c?'  ✓ ':'  ✗ ')+m); if(!c)fail
 
 const NAV = `JSON.stringify({
   pledge: !document.getElementById('to-pledge').hidden,
-  wait: !document.getElementById('pledge-wait').hidden,
+  dots: document.querySelectorAll('#steps > i').length,
   view: [...document.querySelectorAll('.arena-view')].find(v=>!v.hidden)?.dataset.view,
   step: [...document.querySelectorAll('.step')].findIndex(s=>!s.hidden) })`;
 
@@ -49,7 +49,7 @@ try {
   console.log('\n=== in the arena, before any battle');
   ok(idle.step === 3, `student is on the arena step (${idle.step})`);
   ok(!idle.pledge, 'MY PLEDGE is not offered yet');
-  ok(idle.wait, 'the nav explains why: PLEDGE OPENS AFTER THE BATTLE');
+  ok(idle.dots === 4, `the run is advertised as four steps, not seven (${idle.dots} dots)`);
 
   // ---- a question is asked; still no pledge
   await post('/api/game/open',{index:0});
@@ -86,7 +86,7 @@ try {
   ok(serverPhase === 'done', `the room itself moved to done (server phase: ${serverPhase})`);
   ok(done.view === 'done', `the arena shows the result (${done.view})`);
   ok(done.pledge, 'MY PLEDGE ▶ is now offered');
-  ok(!done.wait, 'the waiting note is gone');
+  ok(done.dots === 7, `the pledge steps appear on the dots (${done.dots} dots)`);
   await p.screenshot((process.env.SHOT_DIR ?? '/tmp') + '/pledge-after-battle.png');
 
   // ---- and it still leads where it always did
