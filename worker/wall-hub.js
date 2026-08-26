@@ -246,7 +246,11 @@ export class WallHub {
         await this.savePlayer(existing);
         this.broadcast('roster', { count: this.players.size });
       }
-      return { player: publicPlayer(existing), roll: rollTier(existing.rollPoints) };
+      return {
+        player: publicPlayer(existing),
+        roll: rollTier(existing.rollPoints),
+        game: this.publicGame(),
+      };
     }
 
     const roll = rollBirthStats(seededRandom(`${this.game.sessionId ?? 'wall'}:${id}`));
@@ -275,7 +279,13 @@ export class WallHub {
     };
     await this.savePlayer(player);
     this.broadcast('roster', { count: this.players.size });
-    return { player: publicPlayer(player), roll: rollTier(player.rollPoints) };
+    // Carries the phase for the same reason as the branch above: a latecomer
+    // lands in whatever the room is already doing.
+    return {
+      player: publicPlayer(player),
+      roll: rollTier(player.rollPoints),
+      game: this.publicGame(),
+    };
   }
 
   me(studentId, token) {
@@ -572,8 +582,29 @@ export class WallHub {
     await this.state.storage.put('battle', this.battle);
     await this.saveGame();
 
+    // The room, not each phone, decides when the show is over. Fifty phones
+    // polling for an end time they could each compute is the one thing that
+    // has to stay off the wire during a battle — and a page that misses the
+    // moment has no way to ask again.
+    await this.state.storage.setAlarm(this.battle.startedAt + totalMs);
+
     this.broadcast('battle', { startedAt: this.battle.startedAt, totalMs, count: fighters.length });
     return { ok: true, startedAt: this.battle.startedAt, totalMs, count: fighters.length };
+  }
+
+  /**
+   * The tournament has finished playing out.
+   *
+   * `done` was in PHASES from the start but nothing ever set it; the screens
+   * each worked the ending out from startedAt + totalMs instead. That left the
+   * phones with no event to react to, which is why the pledge could not simply
+   * open when the battle ended.
+   */
+  async alarm() {
+    if (this.game.phase !== 'battle') return;
+    this.game.phase = 'done';
+    await this.saveGame();
+    this.broadcast('phase', { phase: 'done' });
   }
 
   battlePayload() {

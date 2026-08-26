@@ -1,4 +1,5 @@
 import { launch, openPage, errors } from '../lib/cdp.mjs';
+import { runBattleToEnd } from '../lib/battle.mjs';
 import { setTimeout as sleep } from 'node:timers/promises';
 const B='http://127.0.0.1:8799';
 const post=(p,b)=>fetch(B+p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b??{})}).then(r=>r.json());
@@ -45,8 +46,16 @@ try {
   const a = await openPage(`${B}/`, { fresh: true });
   await sleep(2400);
   await makeCharacter(a,'8001','Anan','warrior');
+
+  const early = await footer(a);
+  console.log('\n=== before the battle');
+  ok(early.step === 3 && !early.pledgeBtn, 'no pledge until the tournament is over');
+
+  // Everyone who fights has to be in the room before this.
+  await runBattleToEnd(B, { partnerId: '8003' });
+
   const A = await footer(a);
-  console.log('\n=== before pledging');
+  console.log('\n=== after the battle');
   ok(A.step === 3 && A.pledgeBtn && !A.note, 'MY PLEDGE is offered');
 
   // ---- send it

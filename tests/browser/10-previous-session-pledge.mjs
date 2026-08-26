@@ -1,4 +1,5 @@
 import { launch, openPage } from '../lib/cdp.mjs';
+import { runBattleToEnd } from '../lib/battle.mjs';
 import { setTimeout as sleep } from 'node:timers/promises';
 const B='http://127.0.0.1:8799';
 const post=(p,b)=>fetch(B+p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b??{})}).then(r=>r.json());
@@ -16,6 +17,10 @@ try {
   await sleep(2400);
   await p.evaluate(`document.getElementById('create-character').click()`);
   await sleep(2200);
+
+  // The pledge is offered only after the tournament, so there has to be one.
+  await runBattleToEnd(B, { partnerId: '6410556' });
+
   const f = JSON.parse(await p.evaluate(`JSON.stringify({
     step: [...document.querySelectorAll('.step')].findIndex(s=>!s.hidden),
     pledgeBtn: !document.getElementById('to-pledge').hidden,

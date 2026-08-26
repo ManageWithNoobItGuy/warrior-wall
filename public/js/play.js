@@ -117,6 +117,24 @@ export async function lookupCharacter({ sessionId, studentId }) {
   }
 }
 
+/**
+ * Has the tournament actually finished?
+ *
+ * The room has no idea when the show is over — the timeline does. Rather than
+ * have the server run a timer for something only the screens care about, each
+ * page works it out from the same two numbers.
+ *
+ * Exported because the pledge is gated on it: a student may only write their
+ * card once they have seen how they placed.
+ */
+export function battleFinished() {
+  const game = play.game;
+  if (!game) return false;
+  if (game.phase === 'done') return true;
+  if (game.phase !== 'battle') return false;
+  return Boolean(game.battleStartedAt && Date.now() > game.battleStartedAt + game.battleTotalMs);
+}
+
 /** Pulls the authoritative view of this player and the room. */
 export async function refresh() {
   if (!play.identity) return;
@@ -342,16 +360,11 @@ function syncView(lastGain) {
     return;
   }
   if (phase === 'battle') {
-    // The room has no idea when the show is over — the timeline does. Rather
-    // than have the server run a timer for something only the screens care
-    // about, each page works it out from the same two numbers.
-    const over =
-      play.game.battleStartedAt &&
-      Date.now() > play.game.battleStartedAt + play.game.battleTotalMs;
-    if (over) {
+    if (battleFinished()) {
       renderFinal();
       return setView('done');
     }
+    scheduleBattleEnd();
     el('battle-stance').textContent = play.player.stance
       ? `Your stance: ${stanceById(play.player.stance).name}`
       : '';
@@ -615,10 +628,24 @@ export const playEvents = {
   },
 };
 
-/** The room does not broadcast when a battle finishes — the timeline decides
- *  that — so the phone checks back while one is running. */
-export function watchBattle() {
-  setInterval(() => {
-    if (play.game?.phase === 'battle' || play.game?.phase === 'stance') refresh();
-  }, 5000);
+let battleEndTimer = null;
+
+/**
+ * Flips this page to the result the instant the show ends.
+ *
+ * One timer, and no request: the phone was told startedAt and totalMs when the
+ * battle began, and the ranks with them, so it can draw the ending entirely
+ * from what it already has. The room also broadcasts `done` when its alarm
+ * fires; whichever arrives first wins and the other is a no-op.
+ *
+ * This replaced a five-second poll. Fifty phones asking the room for something
+ * each of them could already work out is exactly the traffic the battle cannot
+ * afford — and it wedged `wrangler dev` outright.
+ */
+function scheduleBattleEnd() {
+  const game = play.game;
+  if (!game?.battleStartedAt) return;
+  clearTimeout(battleEndTimer);
+  const remaining = game.battleStartedAt + game.battleTotalMs - Date.now();
+  battleEndTimer = setTimeout(() => syncView(), Math.max(remaining, 0) + 250);
 }

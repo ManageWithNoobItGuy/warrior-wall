@@ -4,6 +4,7 @@ import {
   createCharacter,
   lookupCharacter,
   refresh as refreshPlay,
+  battleFinished,
   playEvents,
   previewStats,
   statRadar,
@@ -75,6 +76,9 @@ api('/api/state')
       jobs: data.avatar?.jobs ?? [],
       onCharacter: (player) => {
         state.character = player;
+        // The battle ends on a clock, not on an event, so this runs after every
+        // poll — it is what makes MY PLEDGE ▶ appear when the tournament is over.
+        applyPledgeState();
       },
     });
 
@@ -703,15 +707,22 @@ const identityForm = document.getElementById('identity-form');
 let previousCard = null;
 
 /**
- * Swaps the arena's forward button for a receipt once the pledge is in.
+ * Decides what the arena's forward button offers.
  *
- * A student who has already sent their card is here for the quiz and the
- * battle; putting MY PLEDGE ▶ in front of them again invites a second card
- * from the same person onto the wall.
+ * The pledge comes *after* the tournament: a card is what a student leaves
+ * with, and it should carry a character they have already seen fight. Offering
+ * MY PLEDGE ▶ from the moment the character exists pulled people out of the
+ * lesson to write their takeaways while questions were still being asked.
+ *
+ * Once the pledge is in, the button becomes a receipt instead — a student who
+ * has already sent their card is here for the rest of the battle, and putting
+ * MY PLEDGE ▶ back in front of them invites a second card onto the wall.
  */
 function applyPledgeState() {
   const done = Boolean(state.pledged);
-  document.getElementById('to-pledge').hidden = done;
+  const open = battleFinished();
+  document.getElementById('to-pledge').hidden = done || !open;
+  document.getElementById('pledge-wait').hidden = done || open;
   document.getElementById('pledged-note').hidden = !done;
   document.getElementById('view-card').hidden = !done;
 }
