@@ -364,6 +364,7 @@ retakeBtn.addEventListener('click', () => {
   retakeBtn.hidden = true;
   startBtn.hidden = false;
   refreshSummon();
+  refreshPreviewArt();
 });
 
 fileInput.addEventListener('change', async () => {
@@ -397,6 +398,7 @@ function usePhoto(source) {
   startBtn.hidden = true;
   retakeBtn.hidden = false;
   refreshSummon();
+  refreshPreviewArt();
 }
 
 /** Centre-crops whatever is currently chosen into the framed preview box. */
@@ -526,6 +528,7 @@ document.getElementById('lock-release').addEventListener('click', () => {
   startBtn.hidden = false;
   applyClassLock();
   refreshSummon();
+  refreshPreviewArt();
   sfx.cancel();
   show(1);
 });
@@ -549,17 +552,30 @@ function markClass(job) {
   // the only place a student can compare one class against another.
   document.getElementById('preview-tier').textContent = chosen.tagline.toUpperCase();
 
-  const art = document.getElementById('preview-art');
-  // Their own portrait once they have one, so the preview shows the character
-  // they are actually building rather than stock artwork.
-  const own = state.useAvatar && state.avatar ? state.avatar.src : null;
-  art.src = own || `/portraits/${job}.webp`;
-  art.style.setProperty('--accent', chosen.accent);
+  refreshPreviewArt();
 
   document.getElementById('preview-stats').innerHTML = statRadar(
     play.player?.job === job ? play.player.stats : previewStats(chosen),
     { accent: chosen.accent },
   );
+}
+
+/**
+ * Paints the class preview with the student's own portrait once they have one,
+ * falling back to the stock artwork.
+ *
+ * Kept apart from markClass because the picture changes without the class
+ * changing: summoning an avatar and flipping REAL PHOTO / AI AVATAR both leave
+ * the chosen class alone. When this lived inside markClass those three paths
+ * left a freshly painted avatar sitting behind stock artwork.
+ */
+function refreshPreviewArt() {
+  const chosen = jobById(state.job);
+  if (!chosen) return;
+  const art = document.getElementById('preview-art');
+  const own = state.useAvatar && state.avatar ? state.avatar.src : null;
+  art.src = own || `/portraits/${state.job}.webp`;
+  art.style.setProperty('--accent', chosen.accent);
 }
 
 function refreshSummon() {
@@ -620,6 +636,7 @@ generateBtn.addEventListener('click', async () => {
     setSourceButtons();
     sourceToggle.hidden = false;
     drawToBox(state.avatar);
+    refreshPreviewArt();
     sfx.fanfare();
     toast(`Your ${label} is ready!`);
   } catch (err) {
@@ -664,6 +681,7 @@ usePhotoBtn.addEventListener('click', () => {
   state.useAvatar = false;
   setSourceButtons();
   drawToBox(state.photo);
+  refreshPreviewArt();
 });
 
 useAvatarBtn.addEventListener('click', () => {
@@ -671,6 +689,7 @@ useAvatarBtn.addEventListener('click', () => {
   state.useAvatar = true;
   setSourceButtons();
   drawToBox(state.avatar);
+  refreshPreviewArt();
 });
 
 // ------------------------------------------------------ returning students
