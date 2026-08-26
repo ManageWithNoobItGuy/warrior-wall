@@ -1,17 +1,26 @@
 {
   "name": "ai-warrior-wall-of-pledging",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "JRPG-themed class wall: students submit key takeaways and pledge next actions, the system generates a character card, and the instructor projects them.",
+  "description": "JRPG-themed class app: students build a character, answer a live quiz that grows its stats, fight a battle royale on the projector, then pledge their next actions on a warrior card.",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "cf:dev": "wrangler dev",
+    "db:local": "wrangler d1 migrations apply warrior-wall --local",
+    "db:remote": "wrangler d1 migrations apply warrior-wall --remote",
+    "deploy": "wrangler deploy",
+    "battle:sim": "node tools/battle-sim.js",
+    "test": "node tests/run.mjs"
   },
   "dependencies": {
     "qrcode": "^1.5.4"
   },
   "engines": {
     "node": ">=22.5.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
   }
 }

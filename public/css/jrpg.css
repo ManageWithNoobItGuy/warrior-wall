@@ -480,3 +480,41 @@ textarea::placeholder {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* ============================================================
+   DIALOGS — in-page stand-ins for prompt() and confirm()
+   ============================================================ */
+
+.app-dialog {
+  /* `.window` sets position:relative and margin:12px 0 — both of which defeat
+     the margin:auto a <dialog> is centred by. Restore the centring explicitly
+     rather than reordering the shared rule, which every panel on the page
+     depends on. */
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(460px, calc(100vw - 40px));
+  max-width: none;
+  /* Leaves room for the title tab, which sits above the frame by design. */
+  max-height: calc(100dvh - 90px);
+  padding: 22px 24px;
+  color: var(--ink);
+}
+
+.app-dialog::backdrop {
+  background: rgba(4, 4, 14, 0.78);
+}
+
+.app-dialog .speech {
+  margin: 0;
+}
+
+/* The tab overhangs the top of the frame like every other window title, so the
+   dialog itself must not clip it. */
+.app-dialog {
+  overflow: visible;
+}
+
+/* Dialogs that ask before something irreversible should not be dismissible by
+   a stray tap, so there is no click-outside-to-close here — only the buttons
+   and Escape, both of which mean "no". */

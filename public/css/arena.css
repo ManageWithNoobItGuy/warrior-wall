@@ -1,0 +1,719 @@
+/* ============================================================
+   THE ARENA — character sheets, the live quiz, and the field
+   Shared by the student phone, the wall and the projector.
+   ============================================================ */
+
+/* ---------------------------------------------------- character sheet */
+
+.sheet {
+  border: 3px solid var(--edge);
+  background: linear-gradient(180deg, #12123a, #0a0a24);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.06);
+  padding: 12px 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.sheet-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.sheet-who {
+  display: grid;
+  gap: 2px;
+}
+
+.sheet-head b {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 17px;
+  color: var(--ink);
+  line-height: 1.15;
+}
+
+.sheet-id {
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: var(--cyan);
+}
+
+.sheet-class,
+#preview-class {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  padding: 4px 7px;
+  border: 2px solid var(--edge);
+  background: #1d1d5c;
+  color: var(--cyan);
+}
+
+/* Each class keeps its colour everywhere it is named, so the badge on a phone
+   and the token on the projector read as the same character. */
+[data-job='warrior'] { color: #ff7a5c; }
+[data-job='knight'] { color: #9fb8ff; }
+[data-job='thief'] { color: #7cf07c; }
+[data-job='mage'] { color: #c4a2ff; }
+[data-job='healer'] { color: #ffd75e; }
+
+.sheet-score {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--ink-dim);
+}
+.sheet-score i {
+  font-style: normal;
+  color: var(--gold);
+  font-size: 13px;
+}
+
+.sheet-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.roll-tier {
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: var(--ink-dim);
+}
+.roll-tier[data-tone='good'] { color: var(--cyan); }
+.roll-tier[data-tone='great'] { color: var(--gold); }
+
+/* ---------------------------------------------------- sheet body */
+
+.sheet-body {
+  display: grid;
+  /* minmax(0,1fr) rather than 1fr: the chart is allowed to shrink instead of
+     forcing the row wider than the phone. */
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 18px;
+}
+
+.sheet-portrait {
+  /* Scales with the screen — a face is the thing a student most wants to see
+     on their own sheet, and 92px was smaller than the chart beside it. */
+  width: clamp(112px, 30vw, 172px);
+  aspect-ratio: 1;
+  height: auto;
+  border: 3px solid var(--gold);
+  background: #06061a;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+.sheet-portrait img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Below about 380px the portrait and the radar together squeeze the chart
+   until its labels collide, so they stack instead. */
+@media (max-width: 380px) {
+  .sheet-body {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+  .radar {
+    margin-right: auto;
+  }
+}
+
+/* ---------------------------------------------------- radar */
+
+.radar {
+  width: 100%;
+  max-width: 340px;
+  height: auto;
+  display: block;
+  /* Held to the right of its column so the chart sits clear of the portrait
+     rather than drifting back toward it on a wide screen. */
+  margin-left: auto;
+  margin-right: 0;
+}
+
+.radar-shape {
+  /* The shape grows when a stat is earned — the whole reward of the quiz made
+     visible in one movement. */
+  transition: all 500ms cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+
+.radar-label {
+  font-family: var(--font-pixel);
+  font-size: 5.5px;
+  fill: var(--ink-dim);
+}
+
+.radar-value {
+  font-family: var(--font-pixel);
+  font-size: 7px;
+  fill: var(--ink);
+}
+
+.radar-gain {
+  fill: var(--leaf);
+  font-size: 5.5px;
+}
+
+/* ---------------------------------------------------- stat bars */
+
+.statbars {
+  display: grid;
+  gap: 6px;
+}
+
+.statbar {
+  display: grid;
+  grid-template-columns: 34px 1fr 62px;
+  align-items: center;
+  gap: 8px;
+}
+
+.statbar-label {
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: var(--ink-dim);
+}
+
+.statbar-track {
+  height: 12px;
+  border: 2px solid var(--edge);
+  background: #06061a;
+  padding: 2px;
+  display: block;
+}
+
+.statbar-track i {
+  display: block;
+  height: 100%;
+  /* No transition on first paint would be fine, but a character that gains a
+     stat mid-class should visibly grow — that is the whole reward. */
+  transition: width 420ms cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+
+.statbar[data-stat='hp'] .statbar-track i { background: var(--leaf); }
+.statbar[data-stat='atk'] .statbar-track i { background: #ff7a5c; }
+.statbar[data-stat='def'] .statbar-track i { background: var(--cyan); }
+.statbar[data-stat='spd'] .statbar-track i { background: #c4a2ff; }
+.statbar[data-stat='luk'] .statbar-track i { background: var(--gold); }
+
+.statbar-value {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--ink);
+  text-align: right;
+}
+
+.statbar-value .up {
+  color: var(--leaf);
+  font-size: 9px;
+  margin-left: 4px;
+}
+
+/* ---------------------------------------------------- quiz */
+
+.arena-views {
+  margin-top: 12px;
+}
+
+.q-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.q-num,
+.q-clock {
+  font-family: var(--font-pixel);
+  font-size: 11px;
+  color: var(--gold);
+}
+
+.q-timer {
+  height: 14px;
+  border: 2px solid var(--edge);
+  background: #06061a;
+  padding: 2px;
+}
+
+.q-timer i {
+  display: block;
+  height: 100%;
+  background: var(--cyan);
+  /* Linear, and short: the bar is a clock, and easing it would make it lie
+     about how much time is left. */
+  transition: width 120ms linear;
+}
+.q-timer i[data-low='true'] {
+  background: var(--danger);
+}
+
+.q-text {
+  font-family: var(--font-body);
+  font-size: 18px;
+  line-height: 1.5;
+  color: var(--ink);
+  margin: 0 0 14px;
+}
+
+.choices {
+  display: grid;
+  gap: 8px;
+}
+
+.choice {
+  display: grid;
+  grid-template-columns: 30px 1fr;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  padding: 14px 12px;
+  border: 3px solid var(--edge);
+  background: linear-gradient(180deg, var(--window-a), var(--window-b));
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.35;
+  cursor: pointer;
+  /* Thumb-sized: this is tapped in a hurry, on a phone, under time pressure. */
+  min-height: 56px;
+}
+
+.choice:active {
+  transform: translateY(2px);
+}
+
+.choice-key {
+  font-family: var(--font-pixel);
+  font-size: 12px;
+  color: var(--gold);
+  text-align: center;
+}
+
+.choice:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.choice.picked {
+  opacity: 1;
+  border-color: var(--gold);
+  background: linear-gradient(180deg, #3a3a9c, #1a1a52);
+}
+.choice.picked .choice-key {
+  color: var(--ink);
+}
+
+/* ---------------------------------------------------- reveal */
+
+.verdict {
+  font-family: var(--font-pixel);
+  font-size: 20px;
+  margin: 0 0 12px;
+  color: var(--ink-dim);
+}
+.verdict[data-tone='good'] { color: var(--leaf); }
+.verdict[data-tone='bad'] { color: var(--danger); }
+
+.gains {
+  margin-top: 12px;
+}
+
+.gain-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.gain {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  padding: 6px 8px;
+  border: 2px solid var(--edge);
+  background: #1d1d5c;
+  color: var(--ink);
+}
+.gain[data-stat='hp'] { color: var(--leaf); }
+.gain[data-stat='atk'] { color: #ff7a5c; }
+.gain[data-stat='def'] { color: var(--cyan); }
+.gain[data-stat='spd'] { color: #c4a2ff; }
+.gain[data-stat='luk'] { color: var(--gold); }
+
+/* ---------------------------------------------------- stance */
+
+.stance-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.stance-btn {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  padding: 14px 6px;
+  border: 3px solid var(--edge);
+  background: linear-gradient(180deg, var(--window-a), var(--window-b));
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.stance-icon {
+  font-size: 26px;
+  line-height: 1;
+}
+
+.stance-btn b {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--gold);
+}
+
+.stance-btn small {
+  font-family: var(--font-body);
+  font-size: 11px;
+  color: var(--ink-dim);
+  text-align: center;
+  line-height: 1.3;
+}
+
+.stance-btn.selected {
+  border-color: var(--gold);
+  background: linear-gradient(180deg, #3a3a9c, #1a1a52);
+  box-shadow: 0 0 0 2px var(--gold) inset;
+}
+
+/* ---------------------------------------------------- final standing */
+
+.rank-badge {
+  font-family: var(--font-pixel);
+  font-size: 44px;
+  color: var(--ink);
+  text-align: center;
+  margin: 6px 0 14px;
+  text-shadow: 4px 4px 0 var(--edge);
+}
+.rank-badge[data-top='true'] {
+  color: var(--gold);
+}
+
+/* ============================================================
+   THE FIELD — the projector's view of the tournament
+   ============================================================ */
+
+.arena-wrap {
+  position: relative;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  height: 100%;
+  gap: 8px;
+}
+
+.arena {
+  position: relative;
+  overflow: hidden;
+  border: 4px solid var(--edge);
+  background: radial-gradient(ellipse at 50% 40%, #1b1b52 0%, #0a0a22 60%, #06061a 100%);
+}
+
+.arena-floor {
+  position: absolute;
+  inset: 0;
+  /* A faint grid gives the eye something to judge depth and movement against;
+     without it the tokens look like they are sliding on nothing. */
+  background-image:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.04) 0 1px, transparent 1px 46px),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.04) 0 1px, transparent 1px 46px);
+  pointer-events: none;
+}
+
+.duel-cell {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border: 2px solid rgba(255, 255, 255, 0.07);
+  pointer-events: none;
+}
+
+.token {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  /* Every position is a percentage set each frame; the transition is what
+     turns those jumps into a walk. */
+  transition:
+    left 700ms cubic-bezier(0.3, 0.8, 0.3, 1),
+    top 700ms cubic-bezier(0.3, 0.8, 0.3, 1),
+    width 500ms ease,
+    opacity 400ms ease;
+}
+
+.token-art {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+}
+
+.token-face {
+  width: 100%;
+  height: 100%;
+  border: 3px solid var(--gold);
+  background: #12123a;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+
+/* Only the photo turns to face its opponent. Flipping the frame instead would
+   mirror the fallback initials too, and a name rendered backwards reads as a
+   rendering fault rather than a fighter facing left. */
+.token-face img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transform: scaleX(var(--facing, 1));
+}
+
+.token-initials {
+  font-family: var(--font-pixel);
+  /* Scales with the token, which grows from 40px in a crowd to 280px for the
+     champion standing alone. */
+  font-size: calc(var(--size, 48px) * 0.3);
+  color: var(--ink);
+}
+
+.token-face[data-class='warrior'] { border-color: #ff7a5c; }
+.token-face[data-class='knight'] { border-color: #9fb8ff; }
+.token-face[data-class='thief'] { border-color: #7cf07c; }
+.token-face[data-class='mage'] { border-color: #c4a2ff; }
+.token-face[data-class='healer'] { border-color: #ffd75e; }
+
+.token[data-state='dead'] {
+  /* Dim enough that a field of thirty fallen never competes with the ten
+     still fighting, but not so dim that the field looks empty of history. */
+  opacity: 0.14;
+  filter: grayscale(1);
+}
+
+/* Names are hidden on the fallen. A dozen faded labels scattered over the
+   field overlap each other into unreadable smears, and the point of the bodies
+   is to show the field emptying, not to be read. */
+.token[data-state='dead'] .token-name {
+  display: none;
+}
+.token[data-state='dead'] .token-face {
+  transform: rotate(8deg);
+}
+
+.token[data-state='clash'] .token-art {
+  animation: clash 380ms ease-in-out infinite alternate;
+}
+
+@keyframes clash {
+  from { transform: translateX(calc(var(--facing, 1) * -3px)); }
+  to { transform: translateX(calc(var(--facing, 1) * 4px)); }
+}
+
+.token[data-state='champion'] .token-face {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 4px rgba(255, 215, 94, 0.35), 0 0 40px rgba(255, 215, 94, 0.5);
+  animation: champion 1.6s ease-in-out infinite alternate;
+}
+
+@keyframes champion {
+  from { box-shadow: 0 0 0 4px rgba(255, 215, 94, 0.3), 0 0 24px rgba(255, 215, 94, 0.35); }
+  to { box-shadow: 0 0 0 6px rgba(255, 215, 94, 0.55), 0 0 60px rgba(255, 215, 94, 0.7); }
+}
+
+.token-spark {
+  position: absolute;
+  top: -14%;
+  right: -14%;
+  font-size: calc(var(--size, 48px) * 0.42);
+  filter: drop-shadow(0 0 6px rgba(255, 215, 94, 0.9));
+}
+
+.token-name {
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: var(--ink);
+  text-shadow: 2px 2px 0 var(--edge);
+  white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hpbar {
+  width: 100%;
+  height: 7px;
+  border: 2px solid var(--edge);
+  background: #06061a;
+}
+
+.hpbar i {
+  display: block;
+  height: 100%;
+  background: var(--leaf);
+  transition: width 160ms linear;
+}
+.hpbar i[data-low='true'] {
+  background: var(--danger);
+}
+
+.skill-tag {
+  position: absolute;
+  bottom: -22px;
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  color: var(--gold);
+  background: rgba(6, 6, 26, 0.85);
+  border: 2px solid var(--edge);
+  padding: 3px 5px;
+  white-space: nowrap;
+}
+
+.dmg {
+  position: absolute;
+  top: -10%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-pixel);
+  font-size: 13px;
+  color: var(--ink);
+  text-shadow: 2px 2px 0 var(--edge);
+  opacity: 0;
+  pointer-events: none;
+}
+.dmg.crit {
+  color: var(--gold);
+  font-size: 17px;
+}
+.dmg.pop {
+  animation: dmg-pop 620ms ease-out forwards;
+}
+
+@keyframes dmg-pop {
+  0% { opacity: 1; transform: translate(-50%, 0) scale(0.8); }
+  30% { opacity: 1; transform: translate(-50%, -18px) scale(1.15); }
+  100% { opacity: 0; transform: translate(-50%, -40px) scale(1); }
+}
+
+/* ---------------------------------------------------- field HUD */
+
+.arena-hud {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-family: var(--font-pixel);
+  font-size: 11px;
+  color: var(--ink);
+  padding: 0 4px;
+}
+
+.arena-count {
+  color: var(--gold);
+  font-size: 14px;
+}
+
+.arena-kills {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.arena-kills .tiny {
+  font-size: 9px;
+  color: var(--ink-dim);
+}
+.arena-kills b {
+  color: var(--cyan);
+}
+
+/* The places, counted down over the field rather than replacing it — the
+   champion should still be standing there while the list fills in. */
+.arena-ranks {
+  position: absolute;
+  top: 4%;
+  right: 3%;
+  width: min(320px, 32%);
+  display: grid;
+  gap: 4px;
+  background: rgba(6, 6, 26, 0.82);
+  border: 3px solid var(--edge);
+  padding: 10px;
+}
+
+.rank-row {
+  display: grid;
+  grid-template-columns: 46px 1fr auto;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--font-pixel);
+  font-size: 11px;
+  color: var(--ink);
+  animation: rank-in 380ms ease-out;
+}
+
+.rank-row[data-top='true'] {
+  color: var(--gold);
+  font-size: 13px;
+}
+
+.rank-row i {
+  font-style: normal;
+  font-size: 8px;
+  color: var(--ink-dim);
+}
+
+@keyframes rank-in {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Motion here is decoration on top of a result that is already decided, so
+   anyone who has asked for less of it loses nothing by getting none. */
+@media (prefers-reduced-motion: reduce) {
+  .token,
+  .radar-shape,
+  .statbar-track i,
+  .hpbar i,
+  .q-timer i {
+    transition: none;
+  }
+  .token[data-state='clash'] .token-art,
+  .token[data-state='champion'] .token-face,
+  .dmg.pop,
+  .rank-row {
+    animation: none;
+  }
+  .dmg.pop {
+    opacity: 1;
+  }
+}
+
+/* Shown in place of MY PLEDGE once a student has already sent their card for
+   this class — they came back for the quiz, not to pledge twice. */
+.pledged-note {
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: var(--leaf);
+  align-self: center;
+  margin-right: 8px;
+}

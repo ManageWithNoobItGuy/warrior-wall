@@ -13,7 +13,9 @@
 import { JOBS, findJob, generateAvatar } from '../lib/gemini.js';
 import { makeZip } from '../lib/zip.js';
 import * as store from './store.js';
-import { hub, publish } from './wall-hub.js';
+import { callHub, hub, publish } from './wall-hub.js';
+import { gameRoutes } from './game.js';
+import { CLASS_MODIFIERS } from '../lib/rpg/classes.js';
 
 export { WallHub } from './wall-hub.js';
 
@@ -56,17 +58,35 @@ function readCookie(request, name) {
 }
 
 /**
- * Instructor access. With no WALL_PASSCODE set the gate is open, which keeps
- * `wrangler dev` frictionless; production sets the secret.
+ * Is this request allowed to run the class?
+ *
+ * With no WALL_PASSCODE set the gate opens only for a local dev server. It
+ * used to open everywhere, on the reasoning that an unconfigured app should be
+ * frictionless — but that makes a missing secret silently publish the controls
+ * that wipe the wall and reset the room, to anyone holding a URL every student
+ * already has.
+ *
+ * That is not a hypothetical failure. `wrangler secret put` reads its value
+ * from stdin, and when stdin is not a terminal it uploads an empty string
+ * without complaining; an empty string is falsy, and the gate stood open until
+ * someone thought to check it. Fail closed: a deployment that has lost its
+ * passcode should lock its owner out, not let the room in.
  */
 function isInstructor(request, env) {
-  if (!env.WALL_PASSCODE) return true;
   const url = new URL(request.url);
+  if (!env.WALL_PASSCODE) return isLocalDev(url);
   return (
     sameSecret(readCookie(request, COOKIE), env.WALL_PASSCODE) ||
     sameSecret(url.searchParams.get('pass'), env.WALL_PASSCODE) ||
     sameSecret(request.headers.get('X-Wall-Pass'), env.WALL_PASSCODE)
   );
+}
+
+/** A Worker is never served from loopback, so this can only be `wrangler dev`.
+ *  Testing over a LAN address instead? Put a passcode in `.dev.vars`. */
+function isLocalDev(url) {
+  const host = url.hostname.replace(/^\[|\]$/g, '');
+  return host === 'localhost' || host === '127.0.0.1' || host === '::1';
 }
 
 function passcodeForm(message = '') {
@@ -139,8 +159,29 @@ async function handle(request, env, ctx) {
     return instructorPage(request, env, '/projector');
   }
 
+  // ---- quiz, battle and character portraits. Returns null for anything that
+  // is not its business, so the rest of this router still sees those paths.
+  const game = await gameRoutes(request, env, ctx, url, isInstructor(request, env));
+  if (game) return game;
+
   // ---- card images. /p/<id>.png is the display copy; /p/full/<id>.png the
   // full-resolution download. R2 streams both; the Worker never touches bytes.
+  // The portrait that went on a card. Uploaded since the first version but
+  // never served until now — a returning student needs it back.
+  const portrait = /^\/p\/photo\/([\w-]+)\.jpg$/.exec(path);
+  if (portrait && method === 'GET') {
+    const object = await store.getPosterImage(env, portrait[1], 'photo');
+    if (!object) return new Response('Not found', { status: 404 });
+    return new Response(object.body, {
+      headers: {
+        'Content-Type': object.httpMetadata?.contentType ?? 'image/jpeg',
+        'Content-Length': String(object.size),
+        'Cache-Control': 'public, max-age=31536000, immutable',
+        ETag: object.httpEtag,
+      },
+    });
+  }
+
   const image = /^\/p\/(?:(full)\/)?([\w-]+)\.png$/.exec(path);
   if (image && method === 'GET') {
     const object = await store.getPosterImage(env, image[2], image[1] ? 'full' : 'display');
@@ -157,17 +198,26 @@ async function handle(request, env, ctx) {
 
   // ---- live updates
   if (path === '/api/events' && method === 'GET') {
-    return hub(env).fetch('https://hub/subscribe');
+    const session = await store.activeSession(env);
+    return hub(env, session.id).fetch('https://hub/subscribe');
   }
 
   // ---- state
   if (path === '/api/state' && method === 'GET') {
     const session = await store.activeSession(env);
+    // One request answers "what is this class, and what is it doing right
+    // now" — a phone that wakes from sleep re-syncs from this alone.
+    const [count, questions, hubState] = await Promise.all([
+      store.countPosters(env, session.id),
+      store.listQuestions(env, session.id),
+      callHub(env, session.id, '/game', { method: 'GET' }),
+    ]);
     return json({
       session: { id: session.id, title: session.title, createdAt: session.created_at },
       featuredId: session.featured_id ?? null,
-      count: await store.countPosters(env, session.id),
+      count,
       joinUrl: `${url.origin}/`,
+      game: { ...hubState.data, questionCount: questions.length },
       avatar: {
         enabled: Boolean(env.GEMINI_API_KEY),
         limit: limit(env, 'AVATAR_LIMIT', 3),
@@ -177,9 +227,55 @@ async function handle(request, env, ctx) {
           tagline,
           accent,
           card,
+          // How the class fights, alongside how it looks. The phone needs both
+          // to show a stat preview before the student commits to a class.
+          modifier: CLASS_MODIFIERS[id] ?? {},
         })),
       },
     });
+  }
+
+  // ---- the class list (instructor only): switch between classes, rename or
+  // delete one. Reading it is gated too, because the titles alone say who the
+  // instructor teaches and when.
+  if (path === '/api/sessions' && method === 'GET') {
+    if (!isInstructor(request, env)) return json({ error: 'passcode required' }, 401);
+    return json({ sessions: await store.listSessions(env) });
+  }
+
+  if (path.startsWith('/api/sessions/') && method === 'POST') {
+    if (!isInstructor(request, env)) return json({ error: 'passcode required' }, 401);
+    const body = await request.json().catch(() => ({}));
+    const id = String(body.id ?? '');
+    if (!id) return json({ error: 'which class?' }, 400);
+
+    if (path === '/api/sessions/activate') {
+      const outgoing = await store.activeSession(env);
+      if (outgoing.id === id) return json({ ok: true, id, unchanged: true });
+      const session = await store.activateSession(env, id);
+      if (!session) return json({ error: 'no such class' }, 404);
+      // Announced on the room being left, since that is the one every open
+      // page is currently subscribed to.
+      await publish(env, outgoing.id, 'session', { id: session.id, title: session.title });
+      return json({ ok: true, id: session.id, title: session.title });
+    }
+
+    if (path === '/api/sessions/rename') {
+      await store.renameSession(env, id, body.title);
+      await publish(env, id, 'renamed', { id, title: body.title });
+      return json({ ok: true });
+    }
+
+    if (path === '/api/sessions/delete') {
+      const active = await store.activeSession(env);
+      // Deleting the class you are standing in would leave the app with no
+      // live session and `activeSession` silently inventing a new one.
+      if (active.id === id) {
+        return json({ error: 'switch to another class before deleting this one' }, 409);
+      }
+      const removed = await store.deleteSession(env, id);
+      return json({ ok: true, cards: removed });
+    }
   }
 
   // ---- session controls (instructor only)
@@ -188,20 +284,28 @@ async function handle(request, env, ctx) {
     const body = await request.json().catch(() => ({}));
 
     if (path === '/api/session') {
+      // Whoever is watching right now is watching the *outgoing* room, so that
+      // is where the switch has to be announced — nobody is subscribed to the
+      // new one yet.
+      const outgoing = await store.activeSession(env);
       const session = await store.newSession(env, body.title);
-      await publish(env, 'session', { id: session.id, title: session.title });
+      await publish(env, outgoing.id, 'session', { id: session.id, title: session.title });
       return json({ id: session.id, title: session.title });
     }
     if (path === '/api/session/title') {
       const session = await store.activeSession(env);
       await store.renameSession(env, session.id, body.title);
-      await publish(env, 'session', { id: session.id, title: body.title });
+      // Deliberately NOT the `session` event. That one means "a different
+      // class has started" and every page throws away its state for it —
+      // which, fired for a rename, would empty the wall and reload fifty
+      // phones in the middle of a question.
+      await publish(env, session.id, 'renamed', { id: session.id, title: body.title });
       return json({ ok: true });
     }
     if (path === '/api/session/clear') {
       const session = await store.activeSession(env);
       await store.clearSession(env, session.id);
-      await publish(env, 'cleared', {});
+      await publish(env, session.id, 'cleared', {});
       return json({ ok: true });
     }
   }
@@ -233,6 +337,22 @@ async function handle(request, env, ctx) {
       actions,
       job: findJob(body.job)?.id ?? null,
     });
+    // The card shows the character the student fought with. Read back from the
+    // room rather than trusted from the request — the phone is holding these
+    // numbers to draw with, and a card claiming rank 1 should have earned it.
+    const { data: me } = await callHub(
+      env,
+      session.id,
+      `/me?studentId=${encodeURIComponent(studentId)}&token=`,
+      { method: 'GET' },
+    );
+    if (me?.player) {
+      await store.attachCharacter(env, id, {
+        stats: me.player.stats,
+        rank: me.player.rank,
+        score: me.player.score,
+      });
+    }
     // No broadcast yet — the card appears once its display image is uploaded.
     return json({ id }, 201);
   }
@@ -257,7 +377,7 @@ async function handle(request, env, ctx) {
     // The display copy is uploaded last, so its arrival means the card is whole.
     if (variant === 'display') {
       const poster = await store.markPosterReady(env, id);
-      if (poster) await publish(env, 'poster', poster);
+      if (poster) await publish(env, poster.sessionId, 'poster', poster);
     }
     return json({ ok: true });
   }
@@ -270,8 +390,9 @@ async function handle(request, env, ctx) {
     }
     if (method === 'DELETE') {
       if (!isInstructor(request, env)) return json({ error: 'passcode required' }, 401);
+      const doomed = await store.getPoster(env, posterMatch[1]);
       await store.deletePoster(env, posterMatch[1]);
-      await publish(env, 'removed', { id: posterMatch[1] });
+      await publish(env, doomed?.sessionId, 'removed', { id: posterMatch[1] });
       return json({ ok: true });
     }
   }
@@ -284,7 +405,7 @@ async function handle(request, env, ctx) {
     const id = body.id ? String(body.id) : null;
     if (id && !(await store.getPoster(env, id))) return json({ error: 'not found' }, 404);
     await store.setFeatured(env, session.id, id);
-    await publish(env, 'featured', { id });
+    await publish(env, session.id, 'featured', { id });
     return json({ id });
   }
 

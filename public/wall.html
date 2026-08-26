@@ -8,6 +8,7 @@
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/css/jrpg.css" />
     <link rel="stylesheet" href="/css/wall.css" />
+    <link rel="stylesheet" href="/css/arena.css" />
   </head>
   <body>
     <main class="stage stage--wide">
@@ -30,6 +31,18 @@
       </header>
 
       <section class="window">
+        <span class="window-title">CLASSES</span>
+        <details class="session-manager" id="session-manager">
+          <summary>ALL CLASSES — <span id="session-count">…</span></summary>
+          <div id="session-list" class="session-list"></div>
+          <p class="hint">
+            Switching is lossless: each class keeps its own cards, question bank and
+            characters, and picks up exactly where you left it.
+          </p>
+        </details>
+      </section>
+
+      <section class="window">
         <span class="window-title">JOIN THE PARTY</span>
         <div class="join">
           <img id="qr" alt="QR code to the student page" />
@@ -45,6 +58,51 @@
             </div>
           </div>
         </div>
+      </section>
+
+      <section class="window" id="gm">
+        <span class="window-title">GAME MASTER</span>
+
+        <div class="gm-bar">
+          <div class="gm-stat"><b id="gm-players">0</b><span>IN THE ROOM</span></div>
+          <div class="gm-stat"><b id="gm-phase">LOBBY</b><span>PHASE</span></div>
+          <div class="gm-stat"><b id="gm-answered">—</b><span>ANSWERED</span></div>
+          <div class="gm-stat"><b id="gm-stances">—</b><span>STANCES</span></div>
+          <span class="spacer"></span>
+          <button id="gm-reset" class="btn--danger btn--sm">RESET ROOM</button>
+        </div>
+
+        <div class="gm-run">
+          <p class="gm-current" id="gm-current">Add some questions below, then open the first one.</p>
+          <div class="row">
+            <button id="gm-prev" class="btn--ghost btn--sm">◀</button>
+            <button id="gm-open" class="btn--primary">OPEN QUESTION</button>
+            <button id="gm-close" class="btn--primary">CLOSE &amp; REVEAL</button>
+            <button id="gm-next" class="btn--ghost btn--sm">▶</button>
+            <button id="gm-lobby" class="btn--ghost btn--sm">CLEAR SCREEN</button>
+          </div>
+          <div class="row" style="margin-top: 10px">
+            <button id="gm-stance" class="btn--ghost">OPEN STANCE PICKING</button>
+            <button id="gm-battle" class="btn--danger">⚔ START BATTLE</button>
+          </div>
+          <p class="hint" id="gm-hint"></p>
+        </div>
+
+        <details class="gm-editor">
+          <summary>QUESTION BANK — <span id="gm-count">0</span> QUESTIONS</summary>
+          <div id="gm-list" class="gm-list"></div>
+          <div class="row">
+            <button id="gm-add" class="btn--ghost btn--sm">+ ADD QUESTION</button>
+            <span class="spacer"></span>
+            <button id="gm-save" class="btn--primary btn--sm">SAVE BANK</button>
+          </div>
+          <p class="hint">
+            Saving replaces the whole bank for this class session. Questions are only visible to
+            students once you open them.
+          </p>
+        </details>
+
+        <div class="gm-board" id="gm-board"></div>
       </section>
 
       <section class="window window--flat">

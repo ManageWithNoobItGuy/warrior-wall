@@ -4,10 +4,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#06061a" />
-    <title>AI Warrior Wall of Pledging — Create your card</title>
+    <title>AI Warrior Wall of Pledging — Create your character</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/css/jrpg.css" />
     <link rel="stylesheet" href="/css/student.css" />
+    <link rel="stylesheet" href="/css/arena.css" />
   </head>
   <body>
     <main class="stage">
@@ -24,13 +25,37 @@
 
       <!-- ---------------------------------------------------- STEP 1 -->
       <section class="window step" data-step="0">
-        <span class="window-title">PLAYER NAME</span>
-        <div class="stack">
-          <p class="speech">Welcome, warrior! Before you set out, tell us who you are.</p>
-          <div>
-            <label for="name">NAME</label>
-            <input id="name" type="text" maxlength="40" autocomplete="name" placeholder="e.g. Nimmiw" />
+        <span class="window-title">WHO ARE YOU?</span>
+
+        <!-- Shown instead of the form when the ID matches a card from an
+             earlier class: reuse that portrait and class, or start over. -->
+        <div class="returning" id="returning" hidden>
+          <p class="speech">
+            Welcome back, <b id="ret-name"></b>! We found the character from your last class.
+          </p>
+          <div class="ret-card">
+            <img id="ret-photo" alt="Your portrait from your last class" />
+            <div class="ret-meta">
+              <span class="ret-class" id="ret-class"></span>
+              <span class="hint" id="ret-when"></span>
+            </div>
           </div>
+          <div class="row nav">
+            <button class="btn--ghost" id="ret-fresh">NEW LOOK</button>
+            <span class="spacer"></span>
+            <button class="btn--primary" id="ret-use">USE THIS ▶</button>
+          </div>
+          <p class="hint">
+            Your stats start from zero either way — every class begins fresh.
+          </p>
+        </div>
+
+        <div id="identity-form">
+        <div class="stack">
+          <p class="speech">
+            Welcome, warrior! Your student ID is your character — enter it and we will find
+            you.
+          </p>
           <div>
             <label for="student-id">STUDENT ID</label>
             <input
@@ -42,10 +67,19 @@
               placeholder="e.g. 6410123456"
             />
           </div>
+          <div>
+            <label for="name">NAME <span class="optional">NEW PLAYERS ONLY</span></label>
+            <input id="name" type="text" maxlength="40" autocomplete="name" placeholder="e.g. Nimmiw" />
+            <p class="hint">
+              Coming back after a reload, a flat battery or on someone else’s phone? Just your
+              student ID is enough — leave this blank.
+            </p>
+          </div>
         </div>
         <div class="row nav">
           <span class="spacer"></span>
           <button class="btn--primary" data-next>NEXT ▶</button>
+        </div>
         </div>
       </section>
 
@@ -53,7 +87,7 @@
       <section class="window step" data-step="1" hidden>
         <span class="window-title">PORTRAIT</span>
         <div class="stack">
-          <p class="speech">Take a photo of yourself for your card.</p>
+          <p class="speech">Take a photo of yourself — this is the face that fights in the arena.</p>
 
           <div class="portrait-box">
             <video id="video" playsinline autoplay muted hidden></video>
@@ -77,15 +111,56 @@
             If the camera does not open, tap “CHOOSE PHOTO” — you can shoot with your phone’s own
             camera from there.
           </p>
+        </div>
+        <div class="row nav">
+          <button class="btn--ghost" data-back>◀ BACK</button>
+          <span class="spacer"></span>
+          <button class="btn--primary" data-next>NEXT ▶</button>
+        </div>
+      </section>
+
+      <!-- ---------------------------------------------------- STEP 3 -->
+      <section class="window step" data-step="2" hidden>
+        <span class="window-title">CHOOSE YOUR CLASS</span>
+        <div class="stack">
+          <p class="speech" id="class-speech">
+            Every class fights differently. Pick the one you want to be — you can still change it
+            until the first question opens.
+          </p>
+
+          <div class="class-grid" id="class-grid"></div>
+
+          <!-- Shown when the portrait came from a previous card that AI painted
+               as a particular class; the two have to stay in agreement. -->
+          <div class="class-lock" id="class-lock" hidden>
+            <p class="hint">
+              🔒 Your portrait was painted as a <b id="lock-class"></b>, so the class is locked to
+              match it.
+            </p>
+            <button class="btn--ghost btn--sm" id="lock-release">TAKE A NEW PHOTO INSTEAD</button>
+          </div>
+
+          <!-- live preview of what this class starts with -->
+          <div class="sheet" id="class-preview" hidden>
+            <div class="sheet-head">
+              <b id="preview-class">—</b>
+              <span class="roll-tier" id="preview-tier"></span>
+            </div>
+            <div class="sheet-body">
+              <div class="sheet-portrait">
+                <img id="preview-art" alt="" />
+              </div>
+              <div class="statbars" id="preview-stats"></div>
+            </div>
+          </div>
 
           <!-- AI avatar -->
           <div class="summon" id="summon" hidden>
             <div class="summon-head">
-              <span class="field-label">CHOOSE YOUR CLASS</span>
+              <span class="field-label">AI AVATAR</span>
               <span class="quota" id="quota">— / —</span>
             </div>
-            <p class="hint">Pick a class and let AI paint you as a JRPG character.</p>
-            <div class="class-grid" id="class-grid"></div>
+            <p class="hint">Let AI paint you as a JRPG character — you stay recognisable.</p>
             <button id="generate" class="btn--primary summon-btn" disabled>SUMMON AVATAR</button>
             <p class="hint" id="summon-note">Takes about 15–25 seconds.</p>
 
@@ -97,17 +172,109 @@
               </div>
             </div>
           </div>
-
         </div>
         <div class="row nav">
           <button class="btn--ghost" data-back>◀ BACK</button>
           <span class="spacer"></span>
-          <button class="btn--primary" data-next>NEXT ▶</button>
+          <button class="btn--primary" id="create-character">CREATE CHARACTER ▶</button>
         </div>
       </section>
 
-      <!-- ---------------------------------------------------- STEP 3 -->
-      <section class="window step" data-step="2" hidden>
+      <!-- ---------------------------------------------------- STEP 4 : THE ARENA -->
+      <section class="window step" data-step="3" hidden>
+        <span class="window-title" id="arena-title">YOUR CHARACTER</span>
+
+        <!-- the character sheet stays visible under every arena view -->
+        <div class="sheet sheet--live" id="my-sheet" hidden>
+          <div class="sheet-head">
+            <div class="sheet-who">
+              <b id="my-name">—</b>
+              <span class="sheet-id" id="my-id"></span>
+            </div>
+            <span class="sheet-class" id="my-class"></span>
+            <span class="spacer"></span>
+            <span class="sheet-score"><i id="my-score">0</i> PTS</span>
+          </div>
+          <div class="sheet-body">
+            <div class="sheet-portrait">
+              <img id="my-portrait" alt="Your character" hidden />
+            </div>
+            <div class="statbars" id="my-stats"></div>
+          </div>
+          <div class="sheet-foot">
+            <span class="roll-tier" id="my-tier"></span>
+            <span class="spacer"></span>
+            <span class="tiny" id="my-record"></span>
+          </div>
+        </div>
+
+        <div class="arena-views" id="arena-views">
+          <!-- waiting for the instructor -->
+          <div class="arena-view" data-view="idle">
+            <p class="speech" id="idle-message">
+              Your character is ready. Keep this page open and watch the big screen.
+            </p>
+            <p class="hint blink" id="idle-sub">WAITING FOR THE INSTRUCTOR…</p>
+          </div>
+
+          <!-- a question is open -->
+          <div class="arena-view" data-view="question" hidden>
+            <div class="q-head">
+              <span class="q-num" id="q-num">Q1</span>
+              <div class="q-timer"><i id="q-bar"></i></div>
+              <span class="q-clock" id="q-clock">—</span>
+            </div>
+            <p class="q-text" id="q-text"></p>
+            <div class="choices" id="choices"></div>
+            <p class="hint" id="q-status"></p>
+          </div>
+
+          <!-- the answer, and what it earned -->
+          <div class="arena-view" data-view="reveal" hidden>
+            <h2 class="verdict" id="verdict">—</h2>
+            <p class="q-text" id="reveal-answer"></p>
+            <p class="hint" id="reveal-why" hidden></p>
+            <div class="gains" id="gains"></div>
+          </div>
+
+          <!-- pick a stance -->
+          <div class="arena-view" data-view="stance" hidden>
+            <p class="speech">
+              The tournament is about to begin. Choose how you fight — Strike beats Cast, Cast beats
+              Guard, Guard beats Strike.
+            </p>
+            <div class="stance-grid" id="stance-grid"></div>
+            <p class="hint" id="stance-note">
+              Pick one. If you do not, the arena picks for you when the battle starts.
+            </p>
+          </div>
+
+          <!-- the battle is running -->
+          <div class="arena-view" data-view="battle" hidden>
+            <h2 class="victory blink">TO THE ARENA!</h2>
+            <p class="speech">Look up at the big screen — you are fighting right now.</p>
+            <p class="hint" id="battle-stance"></p>
+          </div>
+
+          <!-- your result -->
+          <div class="arena-view" data-view="done" hidden>
+            <div class="rank-badge" id="rank-badge">#—</div>
+            <p class="speech" id="rank-message"></p>
+            <div class="gains" id="final-record"></div>
+          </div>
+        </div>
+
+        <div class="row nav">
+          <button class="btn--ghost" data-back>◀ BACK</button>
+          <span class="spacer"></span>
+          <span class="pledged-note" id="pledged-note" hidden>✓ PLEDGE SENT</span>
+          <button class="btn--ghost btn--sm" id="view-card" hidden>VIEW MY CARD</button>
+          <button class="btn--primary" data-next id="to-pledge">MY PLEDGE ▶</button>
+        </div>
+      </section>
+
+      <!-- ---------------------------------------------------- STEP 5 -->
+      <section class="window step" data-step="4" hidden>
         <span class="window-title">KEY TAKEAWAYS</span>
         <div class="stack">
           <p class="speech">What did you learn today? Add 1–3.</p>
@@ -120,8 +287,8 @@
         </div>
       </section>
 
-      <!-- ---------------------------------------------------- STEP 4 -->
-      <section class="window step" data-step="3" hidden>
+      <!-- ---------------------------------------------------- STEP 6 -->
+      <section class="window step" data-step="5" hidden>
         <span class="window-title">MY PLEDGE</span>
         <div class="stack">
           <p class="speech">After this class, I commit to… Pledge 1–3 actions.</p>
@@ -134,8 +301,8 @@
         </div>
       </section>
 
-      <!-- ---------------------------------------------------- STEP 5 -->
-      <section class="window step" data-step="4" hidden>
+      <!-- ---------------------------------------------------- STEP 7 -->
+      <section class="window step" data-step="6" hidden>
         <span class="window-title">CONFIRM</span>
         <div class="stack">
           <p class="speech">Here is your card. Happy with it? Send it to the wall.</p>
@@ -151,11 +318,16 @@
       </section>
 
       <!-- ---------------------------------------------------- DONE -->
-      <section class="window window--gold step" data-step="5" hidden>
+      <section class="window window--gold step" data-step="7" hidden>
         <span class="window-title">QUEST COMPLETE</span>
         <div class="stack">
           <h2 class="victory">WELCOME TO THE WALL</h2>
           <p class="speech" id="done-message"></p>
+
+          <!-- The lesson usually is not over when a card is sent: more quiz
+               rounds and the battle still come. Without this the completion
+               screen is a dead end and the only way back is a page reload. -->
+          <button id="to-arena" class="btn--primary" hidden>◀ BACK TO THE ARENA</button>
           <div class="preview-wrap">
             <img id="done-preview" alt="Your warrior card" />
           </div>
@@ -171,7 +343,7 @@
       <footer class="row foot">
         <button id="mute" class="btn--ghost btn--sm" data-silent>SOUND: ON</button>
         <span class="spacer"></span>
-        <span class="tiny">v1.1</span>
+        <span class="tiny">v2.0</span>
       </footer>
     </main>
 

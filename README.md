@@ -1,14 +1,103 @@
 # ⚔ AI Warrior Wall of Pledging
 
-An end-of-class web app with a 24-bit JRPG theme. Students take a selfie, enter their
-name and student ID, note **1–3 key takeaways**, and **pledge 1–3 next actions**. The app
-instantly builds a **warrior card** for them, it lands on the instructor's wall in real
-time, and the instructor can put any student's pledge up on the projector.
+An end-of-class web app with a 24-bit JRPG theme, in three acts.
 
-Students can keep their real photo or let **AI (nano banana) paint them as a JRPG
-character** while still being recognisable. Five classes to pick from — warrior, knight,
-thief, mage, healer — capped at 3 generations per student so the API key can't blow
-through its quota.
+**1 · Build a character.** Students take a selfie, enter their name and student ID, and
+pick one of five classes — warrior, knight, thief, mage, healer. Each class starts on a
+different stat line, and a seeded birth roll adds a little fate on top. They can keep
+their real photo or let **AI (nano banana) paint them as a JRPG character** while staying
+recognisable.
+
+**2 · Answer the quiz.** The instructor puts questions on the projector one at a time and
+the room answers on their phones. Answering **grows the character**: correct answers add
+HP, being in the fastest quarter adds SPD, getting a question most of the room got wrong
+adds ATK, and a streak adds DEF. Everyone who presses anything gets LUK, wrong answers
+included.
+
+**3 · Fight.** Everyone picks a stance — Strike, Guard or Cast, a three-way triangle —
+and the whole class fights a single-elimination battle royale on the projector, using the
+stats they earned. Then they write **1–3 key takeaways** and pledge **1–3 next actions**,
+and their warrior card — now carrying the character they built and where they placed —
+lands on the instructor's wall.
+
+The quiz and the battle are both optional. With no questions written, the app behaves
+exactly like it did before: photo, takeaways, pledge, card.
+
+## Running a class
+
+Everything is driven from the **wall page**, under GAME MASTER:
+
+Students rejoin by typing their student ID on the first screen — no photo or class step
+the second time, and no name either, since the ID is the identity and the name they typed
+an hour ago is exactly what they will not remember. A phone that simply reloads restores
+itself silently.
+
+An ID that made a card in an **earlier** class gets offered that card's portrait and class
+back, so a returning student can be in the arena in one more press. They can decline and
+shoot a new photo; their name comes across either way. Stats always start from zero —
+every class is its own tournament.
+
+Sending a card is not the end of the lesson — more rounds of questions and the battle may
+still be to come — so the completion screen carries a way back to the arena, and the arena
+stops offering MY PLEDGE once a card has been sent for this class, showing a receipt and a
+link to the card instead. They are back for the next
+round of questions, not to put a second card on the wall — and the check is made against
+the *current* session, so a card from last week does not suppress this week's pledge.
+
+Reusing an **AI-painted** portrait locks the class to the one it was painted as, and hides
+the summon panel. The picture and the class label have to agree: a healer's robes on a card
+that reads WARRIOR looks like a bug rather than a choice, and offering SUMMON AVATAR to
+someone who just chose to keep their old look invites them to spend a generation replacing
+it. Taking a new photo releases the lock. A reused plain photo locks nothing, since it
+implies no class.
+
+| Step | What you press | What the room sees |
+| --- | --- | --- |
+| Before class | QUESTION BANK → write questions → SAVE BANK | nothing |
+| Students arrive | — | they build characters; the counter climbs |
+| Ask a question | OPEN QUESTION | the question, with a live timer |
+| Reveal it | CLOSE & REVEAL | the answer, who got it, and what everyone earned |
+| Between questions | CLEAR SCREEN | back to the wall |
+| Before the fight | OPEN STANCE PICKING | students choose Strike / Guard / Cast |
+| The fight | ⚔ START BATTLE | the tournament, about 45–70 seconds |
+| Afterwards | — | students write their pledge and send their card |
+
+RESET ROOM wipes every character and result but leaves the cards on the wall alone.
+NEW SESSION opens a fresh class and is what you press between two different groups.
+
+**CLASSES** lists every class ever run and switches between them. Switching is lossless:
+each session has its own room in the Durable Object, so its characters, its question bank
+and how far through it you were are all still there when you switch back — as are its
+cards, which live in D1 keyed by session. A class can be renamed from the list, or deleted
+outright, which does remove its cards for good. The live class cannot be deleted; switch
+away from it first, which is also the guard that stops the app being left with no session
+at all.
+
+## How the numbers work
+
+`lib/rpg/` holds the rules as pure functions with no I/O, so they can be simulated
+without deploying anything:
+
+```bash
+node tools/battle-sim.js 400 24    # 400 rooms of 24 students
+```
+
+Over 300 simulated rooms the champion comes from the better-answering half of the class
+**95%** of the time (chance would be 50%), and the single best answerer wins **23%** of
+the time (chance would be 4%). The rank correlation between quiz performance and finishing
+position sits around **0.44** — answering well is a real edge, not a guarantee, which is
+the point: a room where the outcome is known in advance stops watching.
+
+Stats are normalised to a ten-question baseline before a battle, so a class that asked
+four questions and one that asked twenty produce characters of comparable power. The count
+used is how many questions were **actually asked**, not how many sit in the bank — write
+ten, get through four, and it scales as the four-question class it was. Scaling by the
+bank size instead would squash everyone's earned stats back toward the base and quietly
+hand the tournament to luck.
+
+Questions do not have to run in one block. Ask one at the start of the lesson, two in the
+middle and five at the end: CLEAR SCREEN puts the projector back on the wall between
+batches, stats accumulate across the gaps, and the battle can be run whenever you like.
 
 ## Getting started
 
@@ -103,16 +192,67 @@ has none. Tune it in `buildPrompt()` in `lib/gemini.js`.
 ## Structure
 
 ```
-server.js              HTTP + SSE, no framework
-lib/db.js              schema + queries (Node's built-in node:sqlite)
+worker/index.js        routes; instructor pages sit behind a passcode
+worker/game.js         quiz + battle routes (thin — the rules live elsewhere)
+worker/wall-hub.js     the Durable Object: SSE fan-out AND the room's game state
+worker/store.js        D1 queries + R2 objects
+lib/rpg/stats.js       stat growth, scoring, normalisation
+lib/rpg/classes.js     class modifiers and the birth roll
+lib/rpg/battle.js      the tournament: seeded RNG, bracket, and the timeline
+lib/rpg/skills.js      15 named moves (5 classes × 3 stances)
 lib/gemini.js          per-class prompts, the nano banana call, concurrency queue
 lib/zip.js             store-only ZIP writer for the bulk download
-public/index.html      5-step student form
-public/wall.html       instructor page
-public/projector.html  projection screen
+public/index.html      student flow: identity → portrait → class → arena → pledge
+public/js/play.js      the arena on a phone: quiz, stance, result
+public/js/arena.js     the tournament renderer
+public/js/quiz.js      the instructor's question bank and run controls
 public/js/poster.js    draws the card on a canvas (1080×1440)
+public/portraits/      class artwork, shown in the picker and as a portrait fallback
+tools/battle-sim.js    balance check
 public/fonts/          Press Start 2P + Noto Sans Thai, self-hosted so it works offline
 ```
+
+**Stats are a shape, not a list.** The character sheet plots the five stats as a radar
+(inline SVG, no library). Bars answer "how much"; the pentagon answers "what kind of
+fighter am I" — the question a student actually has while picking a class and while
+watching the shape swell after a right answer. Each class has recognisable
+silhouette: the knight bulges toward HP and DEF, the thief toward SPD.
+
+**One room per class.** The Durable Object is addressed by session id, not by a fixed
+name. That is what makes switching classes lossless rather than destructive, and it means
+two classes can hold entirely separate live state. Only one is *active* at a time, though
+— the student link always resolves to whichever class is live — so running two lessons
+simultaneously would need per-class join links, which this does not have.
+
+**Where the game state lives, and why.** Fifty phones answering the same question inside
+two seconds is the one hot path in this app. Routing that through D1 would put a network
+round trip on every tap, so live state — characters, running stats, answers in flight, the
+computed tournament — lives in the WallHub Durable Object's own SQLite storage, which is
+single-homed and therefore able to answer "was this student in the fastest quarter of the
+room". D1 keeps only what has to outlive the room: the questions, the cards, and a
+snapshot of the final standings.
+
+**The battle is computed before the first frame.** Pressing START BATTLE runs the whole
+tournament immediately; what plays on the projector is a retelling of a timeline that
+already exists, interpolated against the server's `startedAt`. That is what lets a
+projector which reconnects halfway through resume at exactly the right moment instead of
+replaying from the beginning — and it means the result cannot be changed by anything that
+happens on a screen.
+
+**Nothing on a phone is trusted with a score.** Elapsed time is measured against the
+server's clock, never a value the client sends, and the correct answer is withheld from
+the live broadcast until the question closes — so neither a fast clock nor an open
+devtools window is worth anything.
+
+**A student ID is an identity, not a password.** Typing an ID that already has a
+character hands you that character, on any device, at any point in the lesson. That is
+deliberate: a phone dies mid-class, someone borrows a handset, a browser clears its
+storage — and being locked out of your own character for the rest of the lesson is a far
+more likely harm than a classmate deciding to answer in your name. The consequence is
+real and should be understood before the scores are used for anything: **anyone willing
+to type a classmate's ID can play as them.** These scores are for waking a room up, not
+for grading. If this app is ever used for marks, the token in `join` has to become a
+credential again.
 
 Cards are drawn with Canvas on the student's own device — no image API involved — so they
 appear instantly, cost nothing, and work even when the classroom wifi is slow.
@@ -162,9 +302,52 @@ from their base character.
 
 ## Deploying
 
-This is a plain Node server with SQLite on disk. For production:
+This runs on Cloudflare Workers, with D1 for records, R2 for images, and one Durable
+Object for the room.
 
-- **Easiest**: Railway / Render / Fly.io — deploy as-is, just mount a volume at `data/`.
-- **Vercel**: you'd need to swap storage for Postgres + Blob first, since serverless
-  functions can't write to disk.
-- If you expose it publicly, add a passcode in front of `/wall` and `/projector`.
+```bash
+npx wrangler login                                  # the account that owns the worker
+npx wrangler d1 migrations apply warrior-wall --remote
+npm run deploy
+npx wrangler secret put GEMINI_API_KEY              # optional; without it AI avatars hide
+npx wrangler secret put WALL_PASSCODE               # gates /wall and /projector
+```
+
+### Setting the passcode — read this before you do
+
+`wrangler secret put` reads the value from **stdin**, and when stdin is not a real
+terminal it uploads an **empty string** and still prints `✨ Success!`. Run it from a
+terminal where you actually see the `Enter a secret value:` prompt — not through an
+editor's embedded shell, a CI step, or an agent. The tell is that prompt line: no prompt
+means no value.
+
+Always check afterwards, because an empty passcode used to mean *no* passcode:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' https://<your-worker>/wall          # expect 401
+curl -s -o /dev/null -w '%{http_code}\n' 'https://<your-worker>/wall?pass=X' # expect 401
+```
+
+**No native `prompt()` or `confirm()` anywhere.** Chrome offers "prevent this page from
+creating additional dialogs" the second time a page opens one, and once that is ticked
+every later call returns null or false *without showing anything* — which the calling code
+reads as "cancelled". The symptom is a button that silently does nothing, on NEW SESSION,
+on CLEAR, on START BATTLE. All of them now use in-page dialogs instead, which also look
+like the rest of the app and behave the same on a phone.
+
+Every instructor action reports its own failures. They are pressed in front of a class,
+where a request that fails silently looks exactly like a button that does nothing — and a
+401 from a rotated passcode or an expired cookie says so plainly and returns to the
+passcode screen, rather than leaving the wall inexplicably unchanged.
+
+The gate now **fails closed**: with no passcode set it opens only for `localhost`, so a
+deployment that loses its secret locks out its owner rather than handing the room the
+buttons that wipe the wall. To develop over a LAN address instead of loopback, put a
+passcode in `.dev.vars`.
+
+Migrations are additive: `0002_rpg.sql` only creates new tables and adds nullable columns,
+so cards from an earlier class survive it untouched and keep rendering exactly as they did
+— they simply have no character attached.
+
+There is also a plain Node build (`npm start`, SQLite on disk) kept for local development
+without a Cloudflare account. It predates the quiz and does not serve it.

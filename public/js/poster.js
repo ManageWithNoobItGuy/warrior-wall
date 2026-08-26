@@ -489,11 +489,14 @@ export function renderPoster(data) {
   const infoW = POSTER_W - infoX - 76;
   let infoY = portraitY + 6;
 
-  // "LV.1" alone, or "LV.1 MAGE" once a class has been summoned
-  pixelText(ctx, 'LV.1', infoX, infoY, 18, PAL.gold);
+  // "LV.1 MAGE" before a tournament, "#3 MAGE" after one. A card that says
+  // LV.1 next to a champion's stat line reads as a bug.
+  const rank = data.character?.rank ?? null;
+  const lead = rank ? `#${rank}` : 'LV.1';
+  pixelText(ctx, lead, infoX, infoY, 18, rank && rank <= 3 ? PAL.gold : PAL.gold);
   if (data.job?.label) {
     ctx.font = `18px ${FONT_PIXEL}`;
-    const offset = ctx.measureText('LV.1 ').width;
+    const offset = ctx.measureText(`${lead} `).width;
     pixelText(ctx, data.job.label, infoX + offset, infoY, 18, data.job.accent ?? PAL.cyan);
   }
   infoY += 40;
@@ -521,22 +524,50 @@ export function renderPoster(data) {
   pixelText(ctx, `ID ${data.studentId}`, infoX, infoY, 16, PAL.cyan);
   infoY += 42;
 
-  const stats = [
-    { label: 'INSIGHT', value: takeaways.length, max: 3, color: PAL.cyan },
-    { label: 'RESOLVE', value: actions.length, max: 3, color: PAL.leaf },
-  ];
+  // Two shapes of stat block. A card built after a tournament carries the
+  // character that fought — the numbers the student watched climb all lesson.
+  // A card built without one keeps the original pair of bars, which is what
+  // every card from before the arena existed still has to render as.
+  const stats = data.character?.stats
+    ? [
+        { label: 'HP', value: data.character.stats.hp, max: 260, color: PAL.leaf },
+        { label: 'ATK', value: data.character.stats.atk, max: 45, color: '#ff7a5c' },
+        { label: 'DEF', value: data.character.stats.def, max: 40, color: PAL.cyan },
+        { label: 'SPD', value: data.character.stats.spd, max: 45, color: '#c4a2ff' },
+        { label: 'LUK', value: data.character.stats.luk, max: 30, color: PAL.gold },
+      ]
+    : [
+        { label: 'INSIGHT', value: takeaways.length, max: 3, color: PAL.cyan, ticks: 3 },
+        { label: 'RESOLVE', value: actions.length, max: 3, color: PAL.leaf, ticks: 3 },
+      ];
+
+  // Five rows have to fit the same column two used to, so the row pitch is
+  // derived from how many there are rather than fixed.
+  const rowH = stats.length > 2 ? 40 : 60;
+  const labelSize = stats.length > 2 ? 12 : 13;
+  const barW = Math.min(infoW, 300);
+
   for (const stat of stats) {
-    pixelText(ctx, stat.label, infoX, infoY, 13, PAL.dim, { shadow: null });
-    const barY = infoY + 24;
-    const barW = Math.min(infoW, 300);
+    pixelText(ctx, stat.label, infoX, infoY, labelSize, PAL.dim, { shadow: null });
+    if (stats.length > 2) {
+      pixelText(ctx, String(stat.value), infoX + barW, infoY, labelSize, PAL.cream, {
+        align: 'right',
+        shadow: null,
+      });
+    }
+    const barY = infoY + labelSize + 6;
     rect(ctx, infoX - 3, barY - 3, barW + 6, 24, PAL.edge);
     rect(ctx, infoX, barY, barW, 18, '#0a0a22');
-    const filled = Math.round((barW - 6) * (stat.value / stat.max));
+    const filled = Math.round((barW - 6) * Math.min(1, stat.value / stat.max));
     rect(ctx, infoX + 3, barY + 3, filled, 12, stat.color);
-    for (let i = 1; i < stat.max; i++) {
-      rect(ctx, infoX + (barW / stat.max) * i, barY, 3, 18, PAL.edge);
+    for (let i = 1; i < (stat.ticks ?? 0); i++) {
+      rect(ctx, infoX + (barW / stat.ticks) * i, barY, 3, 18, PAL.edge);
     }
-    infoY += 60;
+    infoY += rowH;
+  }
+
+  if (data.character?.score) {
+    pixelText(ctx, `${data.character.score} PTS`, infoX, infoY - 4, 14, PAL.gold, { shadow: null });
   }
 
   // ---- content sections (portraitSize and bodySize were settled up top)

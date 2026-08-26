@@ -6,3 +6,9 @@ data/
 .env.local
 .dev.vars
 .wrangler/
+
+# Database exports. These carry real student names and IDs — this repo is
+# public on GitHub, and a backup is exactly the file that gets committed by
+# accident on a hurried day.
+backups/
+*.sql.gz

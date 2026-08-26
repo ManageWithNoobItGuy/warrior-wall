@@ -99,6 +99,119 @@ export function wireSounds(root = document) {
   });
 }
 
+// --------------------------------------------------------------- dialogs
+
+/**
+ * In-page replacements for `prompt()` and `confirm()`.
+ *
+ * The native ones cannot be relied on. Chrome offers "prevent this page from
+ * creating additional dialogs" the second time a page opens one, and once that
+ * is ticked every later call returns null or false *without showing anything*
+ * — which the calling code reads as "the user cancelled". The result is a
+ * button that silently does nothing, with no way to tell that from a bug.
+ * Mid-class, on the button that starts the session, that is unacceptable.
+ *
+ * These also let the prompts look like the rest of the app and work the same
+ * way on a phone.
+ */
+function openDialog(build) {
+  return new Promise((resolve) => {
+    const dialog = document.createElement('dialog');
+    dialog.className = 'window window--gold app-dialog';
+    const finish = (value) => {
+      resolve(value);
+      dialog.close();
+      dialog.remove();
+    };
+    build(dialog, finish);
+    document.body.append(dialog);
+    // Escape and the backdrop both count as cancelling.
+    dialog.addEventListener('cancel', (event) => {
+      event.preventDefault();
+      finish(null);
+    });
+    dialog.showModal();
+    dialog.querySelector('input, button')?.focus();
+  });
+}
+
+/** Asks for a line of text. Resolves to the string, or null if cancelled. */
+export function askText({ title, message, label, value = '', confirmLabel = 'OK ▶', maxLength = 60 }) {
+  return openDialog((dialog, finish) => {
+    dialog.innerHTML = `
+      <span class="window-title">${escapeHtml(title)}</span>
+      <div class="stack">
+        <p class="speech">${escapeHtml(message)}</p>
+        <div>
+          <label for="dlg-input">${escapeHtml(label)}</label>
+          <input id="dlg-input" type="text" maxlength="${maxLength}">
+        </div>
+      </div>
+      <div class="row" style="margin-top:18px">
+        <button class="btn--ghost" data-cancel>CANCEL</button>
+        <span class="spacer"></span>
+        <button class="btn--primary" data-ok>${escapeHtml(confirmLabel)}</button>
+      </div>`;
+    const input = dialog.querySelector('#dlg-input');
+    input.value = value;
+    const submit = () => finish(input.value.trim() || null);
+    dialog.querySelector('[data-ok]').addEventListener('click', submit);
+    dialog.querySelector('[data-cancel]').addEventListener('click', () => finish(null));
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') submit();
+    });
+  }).then((v) => v);
+}
+
+/** Asks a yes/no question. Resolves true only on an explicit yes. */
+export function askConfirm({ title, message, confirmLabel = 'CONFIRM ▶', danger = false }) {
+  return openDialog((dialog, finish) => {
+    dialog.innerHTML = `
+      <span class="window-title">${escapeHtml(title)}</span>
+      <div class="stack"><p class="speech">${escapeHtml(message)}</p></div>
+      <div class="row" style="margin-top:18px">
+        <button class="btn--ghost" data-cancel>CANCEL</button>
+        <span class="spacer"></span>
+        <button class="${danger ? 'btn--danger' : 'btn--primary'}" data-ok>${escapeHtml(confirmLabel)}</button>
+      </div>`;
+    dialog.querySelector('[data-ok]').addEventListener('click', () => finish(true));
+    dialog.querySelector('[data-cancel]').addEventListener('click', () => finish(false));
+  }).then((v) => v === true);
+}
+
+/**
+ * Reports a failed instructor action.
+ *
+ * These buttons are pressed while someone is standing in front of a class, so
+ * a request that fails quietly is worse than one that fails loudly: the wall
+ * simply does not change, and there is nothing to react to. Every one of them
+ * used to be an unguarded `await`.
+ *
+ * A 401 gets its own path because it has one cause and one fix — the passcode
+ * cookie expired, or the passcode was rotated while this tab stayed open —
+ * and neither is guessable from a generic error message.
+ */
+export function reportFailure(err, what = 'That did not work') {
+  sfx.error();
+  if (err?.status === 401) {
+    toast('Instructor session expired — returning to the passcode screen.', 'bad');
+    setTimeout(() => window.location.assign(window.location.pathname), 1800);
+    return;
+  }
+  toast(`${what}: ${err?.message ?? 'unknown error'}`, 'bad');
+}
+
+/** Runs an instructor action, reporting anything that goes wrong. Returns the
+ *  action's value, or null if it failed. */
+export async function guarded(what, run) {
+  try {
+    return await run();
+  } catch (err) {
+    reportFailure(err, what);
+    return null;
+  }
+}
+
 export function connectEvents(handlers) {
   const source = new EventSource('/api/events');
   for (const [name, fn] of Object.entries(handlers)) {

@@ -1,4 +1,14 @@
-import { api, toast, sfx, wireSounds } from './ui.js';
+import { api, toast, sfx, wireSounds, connectEvents, askConfirm } from './ui.js';
+import {
+  initPlay,
+  createCharacter,
+  lookupCharacter,
+  refresh as refreshPlay,
+  playEvents,
+  previewStats,
+  statRadar,
+  play,
+} from './play.js';
 import {
   renderPoster,
   ensureFonts,
@@ -30,7 +40,19 @@ const state = {
   avatarConfig: null, // { enabled, limit, jobs[] } from the server
   remaining: 0,
   generating: false,
+  character: null, // stats/rank as the arena reports them, once created
+  // Set when the portrait came from a previous card that AI painted as a
+  // particular class. The picture and the class have to agree: a healer's
+  // robes on a card that says WARRIOR reads as a bug, not a choice.
+  classLocked: false,
+  // The card they already sent for this class, if any. Its presence is what
+  // turns the arena's forward button from an invitation into a receipt.
+  pledged: null,
 };
+
+/** How many dots the progress strip shows — one per screen the student walks
+ *  through, the completion screen excluded. */
+const STEP_COUNT = 7;
 
 // ------------------------------------------------------------------ bootstrap
 
@@ -47,16 +69,59 @@ api('/api/state')
     state.remaining = data.avatar?.limit ?? 0;
     renderClasses();
     refreshSummon();
+
+    const identity = initPlay({
+      sessionId: data.session.id,
+      jobs: data.avatar?.jobs ?? [],
+      onCharacter: (player) => {
+        state.character = player;
+      },
+    });
+
+    // A phone that reloaded mid-class already has a character in the room.
+    // Put its owner straight back in the arena rather than making them retype
+    // a name and retake a photo while a question is on screen.
+    if (identity) {
+      document.getElementById('student-id').value = identity.studentId;
+      refreshPlay().then(async () => {
+        if (!play.player) return;
+        document.getElementById('name').value = play.player.name;
+        state.job = play.player.job;
+        markClass(state.job);
+        // This path skips the first screen entirely, so the pledge check that
+        // normally happens there has to happen here too — otherwise a student
+        // who reloads after sending their card is invited to send a second one.
+        const previous = await findPrevious(identity.studentId);
+        state.pledged = previous?.isCurrentSession ? previous : null;
+        applyPledgeState();
+        show(3);
+      });
+    }
   })
   .catch(() => {
     sessionLabel.textContent = 'QUEST: OFFLINE';
   });
 
+// The room speaks to every page over one stream; the arena view reacts to it.
+connectEvents({
+  ...playEvents,
+  renamed: ({ title }) => {
+    state.session = { ...state.session, title };
+    sessionLabel.textContent = `QUEST: ${String(title).toUpperCase()}`;
+  },
+  // A genuinely new class means this phone's character belongs to a room that
+  // no longer exists, so starting over is the only correct thing to do. A
+  // rename must never come through here — see the `renamed` event above.
+  session: ({ id }) => {
+    if (id && id !== state.session?.id) window.location.reload();
+  },
+});
+
 // ------------------------------------------------------------------ stepper
 
 function renderDots() {
   dots.innerHTML = '';
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < STEP_COUNT; i++) {
     const dot = document.createElement('i');
     if (i < state.step) dot.className = 'done';
     if (i === state.step) dot.className = 'current';
@@ -85,25 +150,79 @@ document.addEventListener('click', async (event) => {
 
 async function validate(step) {
   if (step === 0) {
-    const name = value('name');
     const id = value('student-id');
-    if (!name || !id) {
-      fail('Enter your name and student ID first.');
+    if (!id) {
+      fail('Enter your student ID first.');
       return false;
     }
     refreshQuota(); // the student id keys their avatar allowance
+
+    // Ask the room and the card bank at once. The room says whether they have
+    // a character; the bank says whether they have already pledged today and
+    // what they looked like last time.
+    //
+    // The name is deliberately not required to get here. Someone coming back
+    // an hour later remembers their student ID; whether they typed "Preeda" or
+    // "preeda s." at the start is exactly the sort of thing they do not.
+    const [existing, previous] = await Promise.all([
+      lookupCharacter({ sessionId: state.session.id, studentId: id }),
+      findPrevious(id),
+    ]);
+    state.pledged = previous?.isCurrentSession ? previous : null;
+    applyPledgeState();
+
+    // Already have a character in this room? Go straight back to it — this is
+    // the path for a phone that died, a borrowed handset, or a browser that
+    // cleared its storage, and retaking a photo and picking a class again
+    // would build a second character and lose the stats they earned.
+    if (existing) {
+      state.character = existing;
+      state.job = existing.job;
+      // The card built at the end of the lesson reads its name straight off
+      // this field, so put the character's own name back into the form.
+      // Without this, resuming without typing a name produces a nameless card.
+      document.getElementById('name').value = existing.name;
+      markClass(existing.job);
+      toast(`Welcome back, ${existing.name}!`);
+      sfx.fanfare();
+      show(3);
+      return false; // handled here; the stepper must not also advance
+    }
+
+    // No character in this room. Did they leave a card behind before? Their
+    // portrait and class are still in R2, and offering them back saves a
+    // returning student the photo step entirely.
+    if (previous) {
+      showReturning(previous);
+      return false; // the panel's own buttons take it from here
+    }
+
+    // Nobody we know, so this is a new player and we do need a name.
+    if (!value('name')) {
+      fail('Enter your name to create your character.');
+      return false;
+    }
     return true;
   }
 
   if (step === 1) {
     if (!state.photo) {
       sfx.error();
-      return confirm('No photo yet — skip it? Your card will show NO PHOTO.');
+      return askConfirm({
+        title: 'NO PHOTO',
+        message:
+          'You have not taken a photo. Carry on without one? Your card and your fighter in the arena will show your initials instead.',
+        confirmLabel: 'CARRY ON ▶',
+      });
     }
     return true;
   }
 
-  if (step === 2) {
+  // Step 2 is left by its own CREATE CHARACTER button, and step 3 — the arena
+  // — is a place to sit, not a gate: a student can move on to their pledge
+  // whenever they like and the room keeps their character either way.
+
+  if (step === 4) {
     if (collect('takeaways').length < TAKEAWAY_MIN) {
       fail('Write down at least 1 thing you learned.');
       return false;
@@ -111,7 +230,7 @@ async function validate(step) {
     return true;
   }
 
-  if (step === 3) {
+  if (step === 5) {
     if (!collect('actions').length) {
       fail('Pledge at least 1 action.');
       return false;
@@ -332,15 +451,24 @@ function jobById(id) {
   return state.avatarConfig?.jobs.find((job) => job.id === id) ?? null;
 }
 
+/**
+ * The class list.
+ *
+ * Drawn whether or not AI avatars are configured. It used to live inside the
+ * summon panel and disappear with it, which was fine when a class was only a
+ * costume — now it decides how the character fights, so it has to be there
+ * even with no API key on the server.
+ */
 function renderClasses() {
   const config = state.avatarConfig;
-  if (!config?.enabled) return;
-  summon.hidden = false;
+  if (!config?.jobs?.length) return;
+  summon.hidden = !config.enabled || state.classLocked;
   classGrid.innerHTML = config.jobs
     .map(
       (job) => `
       <button type="button" class="class-btn" data-job="${job.id}">
-        <i style="background:${job.accent}"></i>
+        <img class="class-art" src="/portraits/${job.id}.webp" alt="" loading="lazy"
+             width="320" height="320" style="--accent:${job.accent}" />
         <b>${job.label}</b>
         <small>${job.tagline}</small>
       </button>`,
@@ -351,10 +479,88 @@ function renderClasses() {
 classGrid.addEventListener('click', (event) => {
   const button = event.target.closest('[data-job]');
   if (!button) return;
-  state.job = button.dataset.job;
-  [...classGrid.children].forEach((el) => el.classList.toggle('selected', el === button));
+  if (state.classLocked) {
+    if (button.dataset.job !== state.job) {
+      sfx.cancel();
+      toast('Your portrait was painted for this class — take a new photo to change it.', 'bad');
+    }
+    return;
+  }
+  markClass(button.dataset.job);
   refreshSummon();
 });
+
+/**
+ * Locks the class to whatever the reused portrait was painted as, and takes
+ * the summon panel away with it.
+ *
+ * Someone who pressed USE THIS asked to keep the look they already had;
+ * leaving SUMMON AVATAR on that screen invites them to spend a generation
+ * replacing the very thing they just chose to keep.
+ */
+function applyClassLock() {
+  const locked = state.classLocked;
+  classGrid.classList.toggle('is-locked', locked);
+  document.getElementById('class-lock').hidden = !locked;
+  document.getElementById('class-speech').textContent = locked
+    ? 'This is the character from your last class. Your class is set to match your portrait.'
+    : 'Every class fights differently. Pick the one you want to be — you can still change it until the first question opens.';
+  if (locked) {
+    document.getElementById('lock-class').textContent = (state.job ?? '').toUpperCase();
+    summon.hidden = true;
+  } else if (state.avatarConfig?.enabled) {
+    summon.hidden = false;
+  }
+}
+
+/** The way out of the lock: a new photo means no painted class to honour. */
+document.getElementById('lock-release').addEventListener('click', () => {
+  state.classLocked = false;
+  state.photo = null;
+  state.avatar = null;
+  state.useAvatar = false;
+  shot.hidden = true;
+  empty.hidden = false;
+  sourceToggle.hidden = true;
+  retakeBtn.hidden = true;
+  startBtn.hidden = false;
+  applyClassLock();
+  refreshSummon();
+  sfx.cancel();
+  show(1);
+});
+
+function markClass(job) {
+  state.job = job;
+  [...classGrid.children].forEach((el) =>
+    el.classList.toggle('selected', el.dataset.job === job),
+  );
+
+  const preview = document.getElementById('class-preview');
+  const chosen = jobById(job);
+  if (!chosen) {
+    preview.hidden = true;
+    return;
+  }
+  preview.hidden = false;
+  document.getElementById('preview-class').textContent = chosen.label;
+  document.getElementById('preview-class').dataset.job = job;
+  // Once the character exists the room owns the numbers; before that this is
+  // the only place a student can compare one class against another.
+  document.getElementById('preview-tier').textContent = chosen.tagline.toUpperCase();
+
+  const art = document.getElementById('preview-art');
+  // Their own portrait once they have one, so the preview shows the character
+  // they are actually building rather than stock artwork.
+  const own = state.useAvatar && state.avatar ? state.avatar.src : null;
+  art.src = own || `/portraits/${job}.webp`;
+  art.style.setProperty('--accent', chosen.accent);
+
+  document.getElementById('preview-stats').innerHTML = statRadar(
+    play.player?.job === job ? play.player.stats : previewStats(chosen),
+    { accent: chosen.accent },
+  );
+}
 
 function refreshSummon() {
   if (!state.avatarConfig?.enabled) return;
@@ -467,6 +673,196 @@ useAvatarBtn.addEventListener('click', () => {
   drawToBox(state.avatar);
 });
 
+// ------------------------------------------------------ returning students
+
+const returningPanel = document.getElementById('returning');
+const identityForm = document.getElementById('identity-form');
+let previousCard = null;
+
+/**
+ * Swaps the arena's forward button for a receipt once the pledge is in.
+ *
+ * A student who has already sent their card is here for the quiz and the
+ * battle; putting MY PLEDGE ▶ in front of them again invites a second card
+ * from the same person onto the wall.
+ */
+function applyPledgeState() {
+  const done = Boolean(state.pledged);
+  document.getElementById('to-pledge').hidden = done;
+  document.getElementById('pledged-note').hidden = !done;
+  document.getElementById('view-card').hidden = !done;
+}
+
+document.getElementById('view-card').addEventListener('click', () => {
+  const card = state.pledged;
+  if (!card?.posterId) return;
+  document.getElementById('done-preview').src = `/p/${card.posterId}.png`;
+  const download = document.getElementById('download');
+  download.href = `/p/full/${card.posterId}.png`;
+  download.setAttribute('download', `warrior-${value('student-id')}.png`);
+  document.getElementById('done-message').textContent =
+    `${card.name} is already on the wall. Keep the card as a memento!`;
+  setupShare(`/p/full/${card.posterId}.png`);
+  refreshArenaLink();
+  show(7);
+});
+
+async function findPrevious(studentId) {
+  try {
+    const { previous } = await api(
+      `/api/game/previous?studentId=${encodeURIComponent(studentId)}`,
+    );
+    return previous ?? null;
+  } catch {
+    // Never block someone from starting fresh because a lookup failed.
+    return null;
+  }
+}
+
+function showReturning(previous) {
+  previousCard = previous;
+  document.getElementById('ret-name').textContent = previous.name;
+  document.getElementById('ret-photo').src = previous.photoUrl;
+  document.getElementById('ret-class').textContent = previous.job
+    ? `${previous.job.toUpperCase()} · AI AVATAR`
+    : 'YOUR PHOTO';
+  document.getElementById('ret-when').textContent = new Date(previous.createdAt)
+    .toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+    .toUpperCase();
+
+  // The name is theirs either way — reusing it is the whole point of matching
+  // on the student ID, and it is the field the final card reads from.
+  document.getElementById('name').value = previous.name;
+
+  identityForm.hidden = true;
+  returningPanel.hidden = false;
+  sfx.confirm();
+}
+
+function hideReturning() {
+  returningPanel.hidden = true;
+  identityForm.hidden = false;
+}
+
+document.getElementById('ret-use').addEventListener('click', async () => {
+  if (!previousCard) return;
+  const button = document.getElementById('ret-use');
+  button.disabled = true;
+  button.textContent = 'LOADING…';
+  try {
+    const img = await loadImage(previousCard.photoUrl);
+    if (previousCard.isAvatar) {
+      // It is already a painted portrait. Loading it as the avatar rather than
+      // the raw photo is what stops the card renderer posterising it a second
+      // time, which turns a face into mud.
+      state.photo = img;
+      state.avatar = img;
+      state.useAvatar = true;
+      setSourceButtons();
+      sourceToggle.hidden = false;
+    } else {
+      state.photo = img;
+      state.avatar = null;
+      state.useAvatar = false;
+    }
+    drawToBox(activeSource());
+    startBtn.hidden = true;
+    retakeBtn.hidden = false;
+
+    // A painted portrait carries its class with it; a plain photo does not,
+    // so only the former locks anything down.
+    state.classLocked = Boolean(previousCard.isAvatar && previousCard.job);
+    markClass(previousCard.job ?? state.job);
+    applyClassLock();
+    hideReturning();
+    refreshSummon();
+    // Straight to the class step, everything filled in: one button left.
+    show(2);
+  } catch {
+    fail('Could not load your old portrait — take a new photo instead.');
+    hideReturning();
+    show(1);
+  } finally {
+    button.disabled = false;
+    button.textContent = 'USE THIS ▶';
+  }
+});
+
+document.getElementById('ret-fresh').addEventListener('click', () => {
+  state.classLocked = false;
+  applyClassLock();
+  hideReturning();
+  sfx.cancel();
+  show(1); // new photo, new class — the name stays theirs
+});
+
+// ------------------------------------------------------- character creation
+
+const createBtn = document.getElementById('create-character');
+
+/**
+ * Enters the room.
+ *
+ * The portrait is uploaded here rather than with the pledge card, because the
+ * tournament runs in the middle of the lesson — long before anyone has written
+ * what they learned. It goes up at 256px: fifty of these on a projector should
+ * cost about what one card costs.
+ */
+createBtn.addEventListener('click', async () => {
+  if (!state.job) return fail('Pick a class first.');
+
+  createBtn.disabled = true;
+  createBtn.textContent = 'SUMMONING…';
+  try {
+    const player = await createCharacter({
+      sessionId: state.session.id,
+      studentId: value('student-id'),
+      name: value('name'),
+      job: state.job,
+    });
+
+    // The character exists either way; a portrait that fails to upload costs
+    // the student a face in the arena, not their place in it.
+    if (activeSource()) {
+      uploadPortrait(value('student-id')).catch(() => {
+        toast('Your picture did not upload — you will fight without a face.', 'bad');
+      });
+    }
+
+    state.character = player;
+    show(3);
+    sfx.fanfare();
+  } catch (err) {
+    fail(
+      err.code === 'ID_TAKEN'
+        ? 'That student ID is already taken on another phone.'
+        : err.message,
+    );
+  } finally {
+    createBtn.disabled = false;
+    createBtn.textContent = 'CREATE CHARACTER ▶';
+  }
+});
+
+async function uploadPortrait(studentId) {
+  const blob = await canvasToBlob(squareCanvas(activeSource(), 256), 'image/jpeg', 0.8);
+  const res = await fetch(`/av/${encodeURIComponent(studentId)}.jpg`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'image/jpeg' },
+    body: blob,
+  });
+  if (!res.ok) throw new Error('portrait upload failed');
+}
+
+// A student who resummons an avatar after entering the arena should be the new
+// face on the projector, not the old one.
+useAvatarBtn.addEventListener('click', () => {
+  if (play.identity && state.avatar) uploadPortrait(play.identity.studentId).catch(() => {});
+});
+usePhotoBtn.addEventListener('click', () => {
+  if (play.identity && state.photo) uploadPortrait(play.identity.studentId).catch(() => {});
+});
+
 // ------------------------------------------------------------------ preview
 
 async function buildPreview() {
@@ -477,7 +873,11 @@ async function buildPreview() {
     takeaways: collect('takeaways'),
     actions: collect('actions'),
     photo: activeSource(),
-    job: state.useAvatar ? jobById(state.job) : null,
+    // The palette follows the class the student fought as, whether or not they
+    // summoned an avatar — a wall of cards should read as the party that was
+    // just in the arena.
+    job: jobById(state.job),
+    character: state.character,
     title: state.session.title,
     // A raw photo gets posterised so it belongs inside the pixel frame; an AI
     // avatar is already stylised and posterising it twice only muddies the face.
@@ -510,7 +910,7 @@ submitBtn.addEventListener('click', async () => {
         studentId: value('student-id'),
         takeaways: collect('takeaways'),
         actions: collect('actions'),
-        job: state.useAvatar ? state.job : null,
+        job: state.job,
       }),
     });
 
@@ -530,7 +930,12 @@ submitBtn.addEventListener('click', async () => {
     document.getElementById('done-message').textContent =
       `${value('name')} is on the wall. Keep the card as a memento!`;
     setupShare(`/p/full/${id}.png`);
-    show(5);
+    // Coming back to the arena after this should show the receipt, not another
+    // invitation to pledge.
+    state.pledged = { posterId: id, name: value('name'), isCurrentSession: true };
+    applyPledgeState();
+    refreshArenaLink();
+    show(7);
     sfx.fanfare();
   } catch (err) {
     fail(err.message);
@@ -567,6 +972,25 @@ function setupShare(url) {
       /* the user dismissing the share sheet is not an error worth shouting about */
     }
   };
+}
+
+/**
+ * Back to the arena.
+ *
+ * Offered whenever this device has a character in the room, because sending a
+ * card is not the end of the lesson — the instructor may have several more
+ * rounds of questions and the battle still to run.
+ */
+const toArenaBtn = document.getElementById('to-arena');
+
+toArenaBtn.addEventListener('click', async () => {
+  show(3);
+  await refreshPlay();
+});
+
+/** Keeps that button in step with whether a character actually exists. */
+function refreshArenaLink() {
+  toArenaBtn.hidden = !play.player;
 }
 
 document.getElementById('again').addEventListener('click', () => {

@@ -275,3 +275,89 @@
   margin-top: 26px;
   opacity: 0.85;
 }
+
+/* ------------------------------------------------- returning student */
+
+.returning {
+  display: grid;
+  gap: 14px;
+}
+
+.ret-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border: 3px solid var(--edge);
+  background: linear-gradient(180deg, #12123a, #0a0a24);
+  padding: 12px;
+}
+
+.ret-card img {
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border: 3px solid var(--gold);
+  /* The stored portrait is 400px square; a phone shows it at 96 and the
+     browser's smoothing turns pixel art to mush, so keep it crisp. */
+  image-rendering: pixelated;
+  flex: none;
+  background: #06061a;
+}
+
+.ret-meta {
+  display: grid;
+  gap: 6px;
+}
+
+.ret-class {
+  font-family: var(--font-pixel);
+  font-size: 12px;
+  color: var(--gold);
+}
+
+.class-lock {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  border: 3px solid var(--edge);
+  background: rgba(255, 215, 94, 0.07);
+  padding: 10px 12px;
+}
+
+.class-lock .hint {
+  margin: 0;
+}
+
+.class-lock b {
+  color: var(--gold);
+}
+
+/* A locked class still shows every option — seeing what you are not is part of
+   knowing what you are — but only the chosen one stays legible. */
+.class-grid.is-locked .class-btn:not(.selected) {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* ------------------------------------------------- class artwork */
+
+.class-btn .class-art {
+  width: 100%;
+  aspect-ratio: 1;
+  height: auto;
+  object-fit: cover;
+  border: 2px solid var(--edge);
+  display: block;
+  margin-bottom: 6px;
+  /* Unselected classes sit back so the chosen one reads as chosen — but only
+     just. Pushed further than this and the darker portraits (warrior, thief)
+     go to near-black, and a student cannot see what they are choosing between. */
+  filter: saturate(0.85) brightness(0.92);
+  transition: filter 160ms ease, border-color 160ms ease;
+}
+
+.class-btn.selected .class-art,
+.class-btn:hover .class-art {
+  filter: none;
+  border-color: var(--accent, var(--gold));
+}

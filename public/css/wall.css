@@ -325,3 +325,399 @@ body.projector {
   width: 0.6em;
   color: var(--gold);
 }
+
+/* ============================================================
+   GAME MASTER — the instructor's controls
+   ============================================================ */
+
+.gm-bar {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding-bottom: 12px;
+  border-bottom: 3px solid rgba(255, 255, 255, 0.1);
+}
+
+.gm-stat {
+  display: grid;
+  gap: 2px;
+}
+.gm-stat b {
+  font-family: var(--font-pixel);
+  font-size: 18px;
+  color: var(--gold);
+}
+.gm-stat span {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  color: var(--ink-dim);
+}
+
+.gm-run {
+  padding: 14px 0;
+}
+
+.gm-current {
+  font-family: var(--font-body);
+  font-size: 15px;
+  color: var(--ink);
+  margin: 0 0 12px;
+  min-height: 22px;
+}
+
+.gm-editor {
+  border-top: 3px solid rgba(255, 255, 255, 0.1);
+  padding-top: 12px;
+}
+
+.gm-editor summary {
+  font-family: var(--font-pixel);
+  font-size: 11px;
+  color: var(--cyan);
+  cursor: pointer;
+  padding: 6px 0;
+}
+
+.gm-list {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0;
+}
+
+.gm-q {
+  border: 3px solid var(--edge);
+  background: rgba(6, 6, 26, 0.5);
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.gm-q-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.gm-q-head .num {
+  font-family: var(--font-pixel);
+  font-size: 11px;
+  color: var(--gold);
+  min-width: 22px;
+}
+
+.gm-q-text {
+  flex: 1;
+  min-width: 120px;
+}
+
+.gm-q-time {
+  width: 68px;
+  text-align: center;
+}
+
+.gm-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 6px;
+}
+
+.gm-choice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* The radio is the "this one is right" control, so it needs to read as a
+   deliberate mark rather than a stray dot next to a text field. */
+.gm-choice input[type='radio'] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--gold);
+  flex: none;
+  cursor: pointer;
+}
+
+.gm-choice .choice-key {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--ink-dim);
+}
+
+.gm-choice input[type='radio']:checked ~ .choice-key {
+  color: var(--gold);
+}
+
+.gm-choice-text {
+  flex: 1;
+  min-width: 80px;
+}
+
+.gm-board {
+  margin-top: 12px;
+}
+
+.gm-board-rows,
+.proj-board {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.board-row {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--font-pixel);
+  font-size: 11px;
+  color: var(--ink);
+}
+.board-row b {
+  color: var(--gold);
+}
+.board-row i {
+  font-style: normal;
+  color: var(--cyan);
+}
+
+/* ============================================================
+   PROJECTOR — the game, full screen
+   ============================================================ */
+
+.proj-game {
+  height: 100%;
+  display: grid;
+  align-content: center;
+  gap: clamp(12px, 2vh, 28px);
+  padding: clamp(20px, 4vw, 70px);
+}
+
+.proj-game-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.proj-game .q-num {
+  font-family: var(--font-pixel);
+  font-size: clamp(14px, 1.6vw, 24px);
+  color: var(--gold);
+}
+
+.proj-question {
+  font-family: var(--font-body);
+  font-weight: 700;
+  /* Sized off the viewport so the back row can read it, and capped so a short
+     question does not become a wall of letters. */
+  font-size: clamp(28px, 4.4vw, 74px);
+  line-height: 1.25;
+  color: var(--ink);
+  margin: 0;
+}
+
+.proj-choices {
+  display: grid;
+  gap: clamp(8px, 1.2vh, 16px);
+}
+
+.proj-choice {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 18px;
+  border: 4px solid var(--edge);
+  background: linear-gradient(180deg, var(--window-a), var(--window-b));
+  padding: clamp(10px, 1.6vh, 22px) clamp(14px, 2vw, 28px);
+  font-family: var(--font-body);
+  font-size: clamp(20px, 2.4vw, 40px);
+  color: var(--ink);
+}
+
+.proj-choice[data-right='true'] {
+  border-color: var(--leaf);
+  background: linear-gradient(180deg, #1d5c2e, #0d2a16);
+}
+
+.proj-choice .choice-key {
+  font-family: var(--font-pixel);
+  font-size: clamp(16px, 1.8vw, 28px);
+  color: var(--gold);
+}
+
+.proj-dist {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: clamp(120px, 14vw, 240px);
+}
+
+.proj-dist i {
+  display: block;
+  height: 14px;
+  background: var(--cyan);
+  border: 2px solid var(--edge);
+  min-width: 2px;
+  flex: 1;
+}
+
+.proj-dist b {
+  font-family: var(--font-pixel);
+  font-size: clamp(12px, 1.2vw, 20px);
+  color: var(--ink-dim);
+}
+
+.proj-why {
+  font-family: var(--font-body);
+  font-size: clamp(16px, 1.7vw, 28px);
+  color: var(--cyan);
+  margin: 0;
+}
+
+.proj-stances {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(10px, 2vw, 28px);
+}
+
+.proj-stance {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  border: 4px solid var(--edge);
+  background: linear-gradient(180deg, var(--window-a), var(--window-b));
+  padding: clamp(14px, 3vh, 40px) 10px;
+}
+.proj-stance span {
+  font-size: clamp(34px, 5vw, 84px);
+  line-height: 1;
+}
+.proj-stance b {
+  font-family: var(--font-pixel);
+  font-size: clamp(14px, 1.6vw, 26px);
+  color: var(--gold);
+}
+.proj-stance small {
+  font-family: var(--font-body);
+  font-size: clamp(12px, 1.1vw, 20px);
+  color: var(--ink-dim);
+  text-align: center;
+}
+
+.proj-arena {
+  height: 100vh;
+  padding: clamp(10px, 1.5vw, 28px);
+}
+
+.champion-banner {
+  position: absolute;
+  inset: auto 0 8% 0;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.champion-banner b.pixel {
+  font-family: var(--font-pixel);
+  font-size: clamp(12px, 1.4vw, 22px);
+  color: var(--gold);
+  letter-spacing: 0.2em;
+}
+
+.champion-banner h1 {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: clamp(32px, 5vw, 84px);
+  color: var(--ink);
+  margin: 0;
+  text-shadow: 5px 5px 0 var(--edge);
+}
+
+.champion-stats {
+  display: flex;
+  gap: clamp(10px, 1.6vw, 26px);
+  font-family: var(--font-pixel);
+  font-size: clamp(11px, 1.1vw, 18px);
+  color: var(--ink-dim);
+}
+.champion-stats b {
+  color: var(--cyan);
+}
+
+/* ============================================================
+   CLASSES — switching between sessions
+   ============================================================ */
+
+.session-manager summary {
+  font-family: var(--font-pixel);
+  font-size: 11px;
+  color: var(--cyan);
+  cursor: pointer;
+  padding: 6px 0;
+}
+
+.session-list {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.session-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+  border: 3px solid var(--edge);
+  background: rgba(6, 6, 26, 0.5);
+  padding: 10px 12px;
+}
+
+/* The live class is the one thing on this list you must never misread. */
+.session-row[data-active='true'] {
+  border-color: var(--gold);
+  background: rgba(255, 215, 94, 0.08);
+}
+
+.session-name {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.session-name b {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-meta {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  color: var(--ink-dim);
+}
+
+.session-live {
+  color: var(--gold);
+}
+
+.session-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+@media (max-width: 560px) {
+  .session-row {
+    grid-template-columns: 1fr;
+  }
+  .session-actions {
+    justify-content: flex-start;
+  }
+}
