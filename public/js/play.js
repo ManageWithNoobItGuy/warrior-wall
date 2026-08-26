@@ -173,8 +173,12 @@ function renderSheet() {
   // something that failed to load.
   const portrait = el('my-portrait');
   if (portrait) {
+    // ?v= is what makes a resummoned avatar actually appear: the path alone is
+    // identical for every version of a student's face, so the browser would
+    // keep serving the copy it cached (and the dataset.src guard below would
+    // never see a change worth acting on).
     const own = play.player.hasPortrait
-      ? `/av/${encodeURIComponent(play.player.studentId)}.jpg`
+      ? `/av/${encodeURIComponent(play.player.studentId)}.jpg?v=${play.player.portraitAt ?? 0}`
       : null;
     const fallback = play.player.job ? `/portraits/${play.player.job}.webp` : null;
     const src = own ?? fallback;
@@ -184,7 +188,7 @@ function renderSheet() {
       // A portrait that 404s (uploaded late, or not at all) drops back to the
       // class artwork rather than leaving a broken image on the sheet.
       portrait.onerror = () => {
-        if (fallback && portrait.src.endsWith('.jpg')) portrait.src = fallback;
+        if (fallback && portrait.src.includes('/av/')) portrait.src = fallback;
       };
     }
     portrait.hidden = !src;
@@ -590,6 +594,12 @@ export const playEvents = {
   stance: () => {
     refresh();
     sfx.move();
+  },
+  // The portrait is uploaded in the background after CREATE CHARACTER, so the
+  // sheet is drawn before the face exists. This is the room telling it to look
+  // again.
+  portrait: ({ studentId }) => {
+    if (studentId && String(studentId) === String(play.identity?.studentId)) refresh();
   },
   battle: () => refresh(),
   phase: () => refresh(),

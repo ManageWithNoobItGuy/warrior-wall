@@ -270,6 +270,7 @@ export class WallHub {
       rank: null,
       damage: 0,
       hasPortrait: false,
+      portraitAt: 0,
       joinedAt: Date.now(),
     };
     await this.savePlayer(player);
@@ -300,7 +301,14 @@ export class WallHub {
     const player = this.players.get(String(studentId ?? ''));
     if (!player) return { ok: false };
     player.hasPortrait = true;
+    // The URL never changes, so without a version the browser keeps showing
+    // the portrait it already cached — which is how a student who resummoned
+    // an avatar still went into the arena wearing their old face.
+    player.portraitAt = Date.now();
     await this.savePlayer(player);
+    // The upload finishes after the sheet has already been drawn. Nothing else
+    // would tell that page to look again.
+    this.broadcast('portrait', { studentId: player.studentId, portraitAt: player.portraitAt });
     return { ok: true };
   }
 
@@ -540,7 +548,7 @@ export class WallHub {
       playerId: p.studentId,
       name: p.name,
       classId: p.job ?? 'healer',
-      avatarUrl: p.hasPortrait ? `/av/${p.studentId}.jpg` : null,
+      avatarUrl: p.hasPortrait ? `/av/${p.studentId}.jpg?v=${p.portraitAt ?? 0}` : null,
       stats: asked > 0 ? normalizeStats(p.stats, asked) : p.stats,
       stance: p.stance ?? defaultStance(seed, p.studentId),
     }));
@@ -653,6 +661,7 @@ function publicPlayer(p) {
     damage: p.damage,
     rollPoints: p.rollPoints,
     hasPortrait: p.hasPortrait,
+    portraitAt: p.portraitAt ?? 0,
   };
 }
 

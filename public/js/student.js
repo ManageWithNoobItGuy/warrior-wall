@@ -637,6 +637,10 @@ generateBtn.addEventListener('click', async () => {
     sourceToggle.hidden = false;
     drawToBox(state.avatar);
     refreshPreviewArt();
+    // Already in the arena: the room is holding the previous face, and only an
+    // upload replaces it. The toggle buttons below did this and the summon
+    // itself did not, so a resummon changed the preview and nothing else.
+    if (play.identity) uploadPortrait(play.identity.studentId).catch(() => {});
     sfx.fanfare();
     toast(`Your ${label} is ready!`);
   } catch (err) {
