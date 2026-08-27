@@ -135,6 +135,37 @@ export function battleFinished() {
   return Boolean(game.battleStartedAt && Date.now() > game.battleStartedAt + game.battleTotalMs);
 }
 
+/**
+ * Deletes this device's own character, and forgets it.
+ *
+ * The room checks the token and refuses once the tournament has been computed,
+ * so this is a request rather than a guarantee — the caller reports whatever
+ * comes back.
+ */
+export async function leaveCharacter() {
+  if (!play.identity) return { ok: false, code: 'NO_PLAYER' };
+  const { studentId, token } = play.identity;
+  const result = await api('/api/game/leave', {
+    method: 'POST',
+    body: JSON.stringify({ studentId, token }),
+  });
+  play.player = null;
+  play.identity = null;
+  play.game = null;
+  try {
+    localStorage.removeItem(STORE_KEY);
+  } catch {
+    /* nothing to clean up */
+  }
+  return result;
+}
+
+/** Can this character still be given up? Locked once the bracket exists. */
+export function canLeave() {
+  const phase = play.game?.phase;
+  return Boolean(play.identity && play.player && phase !== 'battle' && phase !== 'done');
+}
+
 /** Pulls the authoritative view of this player and the room. */
 export async function refresh() {
   if (!play.identity) return;

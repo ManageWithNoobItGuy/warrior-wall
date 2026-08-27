@@ -468,6 +468,20 @@ export async function getPortrait(env, sessionId, studentId) {
   return env.CARDS.get(portraitKey(sessionId, studentId));
 }
 
+export async function deletePortrait(env, sessionId, studentId) {
+  await env.CARDS.delete(portraitKey(sessionId, studentId));
+}
+
+/** The cards a student has in one class — normally none or one. */
+export async function postersByStudent(env, sessionId, studentId) {
+  const { results } = await env.DB.prepare(
+    `SELECT id FROM posters WHERE session_id = ? AND student_id = ?`,
+  )
+    .bind(sessionId, String(studentId))
+    .all();
+  return results.map((row) => row.id);
+}
+
 /** Adds the character to a poster row once the card is built. */
 export async function attachCharacter(env, posterId, { stats, rank, score }) {
   await env.DB.prepare(`UPDATE posters SET stats = ?, rank = ?, score = ? WHERE id = ?`)

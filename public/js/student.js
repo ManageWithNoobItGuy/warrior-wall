@@ -5,6 +5,8 @@ import {
   lookupCharacter,
   refresh as refreshPlay,
   battleFinished,
+  leaveCharacter,
+  canLeave,
   playEvents,
   previewStats,
   statRadar,
@@ -773,9 +775,32 @@ function applyPledgeState() {
   document.getElementById('to-pledge').hidden = done || !open;
   document.getElementById('pledged-note').hidden = !done;
   document.getElementById('view-card').hidden = !done;
+  // Giving up a character is only offered while the room could still be
+  // changed; the server enforces the same rule, this only hides the button.
+  document.getElementById('leave-character').hidden = !canLeave();
   // The run gets longer the moment the pledge opens.
   renderDots();
 }
+
+document.getElementById('leave-character').addEventListener('click', async () => {
+  const sure = await askConfirm({
+    title: 'DELETE MY CHARACTER',
+    message:
+      'Your character, your points and your portrait are all deleted, and you start again from the beginning. This cannot be undone.',
+    confirmLabel: 'DELETE',
+    danger: true,
+  });
+  if (!sure) return;
+  try {
+    const result = await leaveCharacter();
+    if (result?.error) return fail(result.error);
+  } catch (err) {
+    return fail(`Could not delete your character: ${err.message}`);
+  }
+  // Everything this phone knew about the character is gone; the cleanest way
+  // back to a blank first screen is to start the page over.
+  window.location.reload();
+});
 
 document.getElementById('view-card').addEventListener('click', () => {
   const card = state.pledged;

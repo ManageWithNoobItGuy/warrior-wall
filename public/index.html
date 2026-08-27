@@ -266,6 +266,10 @@
 
         <div class="row nav">
           <button class="btn--ghost" data-back>◀ BACK</button>
+          <!-- Only while the tournament has not been computed: a fighter
+               vanishing from a bracket already being replayed would leave the
+               projector showing a ghost. -->
+          <button class="btn--ghost btn--sm" id="leave-character" hidden>DELETE MY CHARACTER</button>
           <span class="spacer"></span>
           <span class="pledged-note" id="pledged-note" hidden>✓ PLEDGE SENT</span>
           <button class="btn--ghost btn--sm" id="view-card" hidden>VIEW MY CARD</button>

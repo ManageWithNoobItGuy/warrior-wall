@@ -149,6 +149,10 @@ function characterTile(player) {
           <span class="spacer"></span>
           <span class="party-score">${player.score ?? 0} PTS</span>
         </div>
+        <div class="card-actions">
+          <button class="btn--sm btn--ghost" data-action="rename">RENAME</button>
+          <button class="btn--sm btn--danger" data-action="remove" title="Remove from the class">✕</button>
+        </div>
       </article>`;
 }
 
@@ -169,7 +173,7 @@ function cardTile(poster, newId) {
   return `
       <article class="card ${poster.id === featuredId ? 'is-featured' : ''} ${
         poster.id === newId ? 'is-new' : ''
-      }" data-id="${poster.id}">
+      }" data-id="${poster.id}" data-student="${escapeHtml(poster.studentId ?? '')}">
         ${poster.id === featuredId ? '<span class="badge featured-flag">ON SCREEN</span>' : ''}
         <img src="/p/${poster.id}.png" alt="Card for ${escapeHtml(poster.name)}" loading="lazy"
              data-action="project" title="Click to put on the projector" />
@@ -183,7 +187,7 @@ function cardTile(poster, newId) {
           <a class="btn btn--sm btn--ghost" href="/p/full/${poster.id}.png" download="warrior-${escapeHtml(
             poster.studentId,
           )}.png" title="Download">⬇</a>
-          <button class="btn--sm btn--danger" data-action="delete" title="Delete">✕</button>
+          <button class="btn--sm btn--danger" data-action="remove" title="Remove from the class">✕</button>
         </div>
       </article>`;
 }
@@ -202,18 +206,57 @@ roster.addEventListener('click', async (event) => {
     });
   }
 
-  if (action === 'delete') {
+  const studentId = card.dataset.student;
+
+  if (action === 'rename') {
+    const player = party.find((p) => String(p.studentId) === studentId);
+    const name = await askText({
+      title: 'RENAME MEMBER',
+      message: `What should ${player?.name ?? 'this student'} be called?`,
+      label: 'NAME',
+      value: player?.name ?? '',
+      confirmLabel: 'RENAME',
+    });
+    if (!name || name.trim() === (player?.name ?? '')) return;
+    const done = await guarded('Could not rename that member', () =>
+      api('/api/game/player/rename', {
+        method: 'POST',
+        body: JSON.stringify({ studentId, name }),
+      }),
+    );
+    if (done) {
+      await loadParty();
+      render();
+      toast(`Renamed to ${name.trim()}.`);
+    }
+  }
+
+  if (action === 'remove') {
+    const player = party.find((p) => String(p.studentId) === studentId);
     const poster = posters.find((p) => p.id === id);
+    const who = player?.name ?? poster?.name ?? 'this student';
+    const hasCard = Boolean(poster);
     const sure = await askConfirm({
-      title: 'DELETE CARD',
-      message: `Delete the card for ${poster?.name ?? 'this student'}? This cannot be undone.`,
-      confirmLabel: 'DELETE',
+      title: 'REMOVE MEMBER',
+      message: hasCard
+        ? `Remove ${who} from the class? Their character and their card both go, and this cannot be undone.`
+        : `Remove ${who} from the class? Their character and portrait go, and this cannot be undone.`,
+      confirmLabel: 'REMOVE',
       danger: true,
     });
     if (!sure) return;
-    await guarded('Could not delete that card', () =>
-      api(`/api/posters/${id}`, { method: 'DELETE' }),
+    const done = await guarded('Could not remove that member', () =>
+      api('/api/game/player/remove', {
+        method: 'POST',
+        body: JSON.stringify({ studentId }),
+      }),
     );
+    if (done) {
+      posters = posters.filter((p) => String(p.studentId) !== studentId);
+      await loadParty();
+      render();
+      toast(`${who} was removed from the class.`);
+    }
   }
 });
 

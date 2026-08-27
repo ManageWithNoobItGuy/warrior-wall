@@ -198,6 +198,23 @@ export async function gameRoutes(request, env, ctx, url, isInstructor) {
     return relay(await callHub(env, session.id, '/roster', { method: 'GET' }));
   }
 
+  // ---- a student removing their own character.
+  //
+  // Must be matched BEFORE the instructor block below, which claims every
+  // POST under /api/game/ and answers 401 to anyone without the passcode —
+  // that is every student. The token this device minted is what authorises
+  // this one, and the room refuses once the tournament has been computed.
+  if (path === '/api/game/leave' && method === 'POST') {
+    const body = await request.json().catch(() => ({}));
+    const session = await store.activeSession(env);
+    return json(
+      await purgeStudent(env, session.id, body.studentId, {
+        token: body.token,
+        ownerOnly: true,
+      }),
+    );
+  }
+
   // --------------------------------------------------------- the instructor
 
   if (path.startsWith('/api/game/') && method === 'POST') {
@@ -247,6 +264,18 @@ export async function gameRoutes(request, env, ctx, url, isInstructor) {
     if (path === '/api/game/reset') {
       return relay(await callHub(env, session.id, '/admin/reset', { body: { sessionId: session.id } }));
     }
+
+    if (path === '/api/game/player/rename') {
+      return relay(
+        await callHub(env, session.id, '/admin/player-rename', {
+          body: { studentId: body.studentId, name: body.name },
+        }),
+      );
+    }
+
+    if (path === '/api/game/player/remove') {
+      return json(await purgeStudent(env, session.id, body.studentId, {}));
+    }
   }
 
   if (path === '/api/game/results' && method === 'GET') {
@@ -255,6 +284,40 @@ export async function gameRoutes(request, env, ctx, url, isInstructor) {
   }
 
   return null;
+}
+
+/**
+ * Removes a student from a class completely: character, arena portrait, and any
+ * card they had already sent, images included.
+ *
+ * The room is asked first. If it refuses — no such character, the wrong token,
+ * a battle already running — nothing else is touched, so a rejected request
+ * cannot still cost someone their card.
+ */
+async function purgeStudent(env, sessionId, studentId, { token, ownerOnly = false }) {
+  const id = String(studentId ?? '').slice(0, 24);
+  if (!id) return { error: 'studentId required', code: 'BAD_ID' };
+
+  // Two different doors into the same room method: /leave demands the device's
+  // own token, /admin/player-remove does not. Choosing here rather than passing
+  // a flag means a student's request can never arrive as an instructor's.
+  const { data } = await callHub(env, sessionId, ownerOnly ? '/leave' : '/admin/player-remove', {
+    body: { studentId: id, token },
+  });
+  // An instructor may remove someone who only ever sent a card and is no longer
+  // in the room; a student may not remove a character that is not theirs.
+  if (data?.error && (ownerOnly || data.code !== 'NO_PLAYER')) return data;
+
+  const posters = await store.postersByStudent(env, sessionId, id);
+  for (const posterId of posters) {
+    await store.deletePoster(env, posterId);
+    // Per card, not a blanket 'cleared': every other wall on the projector and
+    // in the room would otherwise empty itself over one student leaving.
+    await publish(env, sessionId, 'removed', { id: posterId });
+  }
+  await store.deletePortrait(env, sessionId, id);
+
+  return { ok: true, studentId: id, cards: posters.length };
 }
 
 /** Copies the finished roster out of the DO and into D1, so it outlives the

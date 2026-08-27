@@ -102,6 +102,10 @@ export class WallHub {
         return json(await this.setStance(body));
       case '/portrait':
         return json(await this.markPortrait(body));
+      // A student removing their own character: the token is what proves it is
+      // theirs, and the phase guard is enforced here rather than on the phone.
+      case '/leave':
+        return json(await this.removePlayer({ ...body, ownerOnly: true }));
 
       // ---- read models
       case '/game':
@@ -124,6 +128,10 @@ export class WallHub {
         return json(await this.backToLobby());
       case '/admin/reset':
         return json(await this.reset(body));
+      case '/admin/player-rename':
+        return json(await this.renamePlayer(body));
+      case '/admin/player-remove':
+        return json(await this.removePlayer(body));
       default:
         return new Response('not found', { status: 404 });
     }
@@ -320,6 +328,59 @@ export class WallHub {
     // would tell that page to look again.
     this.broadcast('portrait', { studentId: player.studentId, portraitAt: player.portraitAt });
     return { ok: true };
+  }
+
+  /**
+   * Renames a character in the room.
+   *
+   * A card that has already been sent keeps the name painted into its image —
+   * the poster is a rendered picture, not a template, so this cannot reach
+   * back into one. It is the arena, the wall and the projector that change.
+   */
+  async renamePlayer({ studentId, name }) {
+    const player = this.players.get(String(studentId ?? ''));
+    if (!player) return { error: 'no such player', code: 'NO_PLAYER' };
+    const clean = String(name ?? '').trim().slice(0, 40);
+    if (!clean) return { error: 'a name is required', code: 'BAD_NAME' };
+    player.name = clean;
+    await this.savePlayer(player);
+    this.broadcast('roster', { count: this.players.size });
+    return { ok: true, player: publicPlayer(player) };
+  }
+
+  /**
+   * Takes a character out of the room, with their answers.
+   *
+   * `ownerOnly` is the student's own route: it demands the token this device
+   * minted, and refuses once the tournament has been computed — a fighter
+   * vanishing from a bracket that is already being replayed on the projector
+   * would leave the arena showing a ghost.
+   *
+   * The Worker deals with the portrait and any card; the room only knows about
+   * the character.
+   */
+  async removePlayer({ studentId, token, ownerOnly = false }) {
+    const id = String(studentId ?? '');
+    const player = this.players.get(id);
+    if (!player) return { error: 'no such player', code: 'NO_PLAYER' };
+    if (ownerOnly) {
+      if (!token || player.token !== token) {
+        return { error: 'that is not your character', code: 'BAD_TOKEN' };
+      }
+      if (this.game.phase === 'battle' || this.game.phase === 'done') {
+        return { error: 'the battle has already started', code: 'LOCKED' };
+      }
+    }
+
+    this.players.delete(id);
+    const keys = [`p:${id}`];
+    for (const [questionId, byStudent] of this.answers) {
+      if (byStudent.delete(id)) keys.push(`a:${questionId}:${id}`);
+    }
+    await this.state.storage.delete(keys);
+
+    this.broadcast('roster', { count: this.players.size });
+    return { ok: true, studentId: id, name: player.name };
   }
 
   roster() {
