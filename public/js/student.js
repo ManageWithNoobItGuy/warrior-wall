@@ -36,6 +36,7 @@ const state = {
   posterSmall: null, // Blob, display copy for the wall
   previewUrl: null,
   avatar: null, // AI-generated portrait, once summoned
+  avatarJob: null, // the class it was painted as — see avatarUsable()
   useAvatar: false,
   job: null,
   avatarConfig: null, // { enabled, limit, jobs[] } from the server
@@ -375,6 +376,7 @@ snapBtn.addEventListener('click', () => {
 retakeBtn.addEventListener('click', () => {
   state.photo = null;
   state.avatar = null;
+  state.avatarJob = null;
   state.useAvatar = false;
   shot.hidden = true;
   empty.hidden = false;
@@ -410,6 +412,7 @@ function stopCamera() {
 function usePhoto(source) {
   state.photo = source;
   state.avatar = null;
+  state.avatarJob = null;
   state.useAvatar = false;
   sourceToggle.hidden = true;
   drawToBox(activeSource());
@@ -433,8 +436,23 @@ function drawToBox(source) {
   empty.hidden = true;
 }
 
+/**
+ * Is the painted portrait still the right one for the chosen class?
+ *
+ * A student may change class right up until the first question opens, and the
+ * painting does not change with them: summon as a HEALER, switch to THIEF, and
+ * the thief walked into the arena in white cleric robes. The avatar therefore
+ * belongs to the class it was painted as, and is simply not in play for any
+ * other — the real photo stands in until they summon again.
+ *
+ * Nothing is thrown away: switch back and the painting is theirs again.
+ */
+function avatarUsable() {
+  return Boolean(state.avatar && state.avatarJob === state.job);
+}
+
 function activeSource() {
-  return state.useAvatar && state.avatar ? state.avatar : state.photo;
+  return state.useAvatar && avatarUsable() ? state.avatar : state.photo;
 }
 
 /** Square, downscaled copy of whichever picture is in play. */
@@ -538,6 +556,7 @@ document.getElementById('lock-release').addEventListener('click', () => {
   state.classLocked = false;
   state.photo = null;
   state.avatar = null;
+  state.avatarJob = null;
   state.useAvatar = false;
   shot.hidden = true;
   empty.hidden = false;
@@ -571,6 +590,9 @@ function markClass(job) {
   document.getElementById('preview-tier').textContent = chosen.tagline.toUpperCase();
 
   refreshPreviewArt();
+  // Changing class can put the painted portrait out of play, so the picture
+  // buttons have to be re-judged here and not only after a summon.
+  setSourceButtons();
 
   document.getElementById('preview-stats').innerHTML = statRadar(
     play.player?.job === job ? play.player.stats : previewStats(chosen),
@@ -591,7 +613,7 @@ function refreshPreviewArt() {
   const chosen = jobById(state.job);
   if (!chosen) return;
   const art = document.getElementById('preview-art');
-  const own = state.useAvatar && state.avatar ? state.avatar.src : null;
+  const own = state.useAvatar && avatarUsable() ? state.avatar.src : null;
   art.src = own || `/portraits/${state.job}.webp`;
   art.style.setProperty('--accent', chosen.accent);
 }
@@ -604,6 +626,11 @@ function refreshSummon() {
   quotaEl.classList.toggle('empty', state.remaining <= 0);
 
   if (state.generating) return;
+  if (state.avatar && !avatarUsable()) {
+    summonNote.textContent =
+      `Your avatar was painted as a ${(state.avatarJob ?? '').toUpperCase()} — summon again to fight as a ${(state.job ?? '').toUpperCase()}.`;
+    return;
+  }
   if (state.remaining <= 0) {
     summonNote.textContent = 'No summons left — your real photo works great too.';
   } else if (!state.photo) {
@@ -649,6 +676,7 @@ generateBtn.addEventListener('click', async () => {
       }),
     });
     state.avatar = await loadImage(result.image);
+    state.avatarJob = state.job;
     state.remaining = result.remaining;
     state.useAvatar = true;
     setSourceButtons();
@@ -694,8 +722,15 @@ function avatarErrorMessage(err) {
 }
 
 function setSourceButtons() {
-  usePhotoBtn.className = state.useAvatar ? 'btn--ghost btn--sm' : 'btn--sm btn--primary';
-  useAvatarBtn.className = state.useAvatar ? 'btn--sm btn--primary' : 'btn--ghost btn--sm';
+  const usable = avatarUsable();
+  usePhotoBtn.className = state.useAvatar && usable ? 'btn--ghost btn--sm' : 'btn--sm btn--primary';
+  useAvatarBtn.className = state.useAvatar && usable ? 'btn--sm btn--primary' : 'btn--ghost btn--sm';
+  // Painted for another class: offering it would put the wrong costume on the
+  // card, so it is unavailable until they summon again or switch back.
+  useAvatarBtn.disabled = !usable;
+  useAvatarBtn.title = usable
+    ? ''
+    : `Your avatar was painted as a ${(state.avatarJob ?? '').toUpperCase()}.`;
 }
 
 usePhotoBtn.addEventListener('click', () => {
@@ -707,7 +742,7 @@ usePhotoBtn.addEventListener('click', () => {
 });
 
 useAvatarBtn.addEventListener('click', () => {
-  if (!state.avatar) return;
+  if (!avatarUsable()) return;
   state.useAvatar = true;
   setSourceButtons();
   drawToBox(state.avatar);
@@ -806,6 +841,7 @@ document.getElementById('ret-use').addEventListener('click', async () => {
       // time, which turns a face into mud.
       state.photo = img;
       state.avatar = img;
+      state.avatarJob = previousCard.job ?? null;
       state.useAvatar = true;
       setSourceButtons();
       sourceToggle.hidden = false;
