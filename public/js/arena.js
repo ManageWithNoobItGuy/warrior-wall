@@ -10,7 +10,11 @@
  */
 
 import { WAVE, aliveAtRound, skillOf, stanceIcon } from './rules.js';
-import { escapeHtml } from './ui.js';
+import { escapeHtml, sfx } from './ui.js';
+
+/** Shortest gap between two hit sounds. Below about 80ms the blows stop
+ *  reading as separate events and turn into a buzz. */
+const HIT_GAP_MS = 110;
 
 /** Token size by how many are still standing, authored against a field about
  *  620px tall and scaled to the real one at draw time. */
@@ -86,6 +90,13 @@ export class Arena {
     this.nodes = new Map();
     this.raf = 0;
     this.lastHitKey = new Map();
+    /**
+     * Sound is driven by transitions between frames, which means a projector
+     * that connects halfway through a battle would otherwise fire every blow
+     * it had missed in one burst. The first frame only records where things
+     * stand; nothing is played until the second.
+     */
+    this.audio = { primed: false, lastHitAt: 0, wave: -1, dead: new Set() };
 
     const rounds = [...new Set(payload.result.matches.map((m) => m.round))].sort((a, b) => a - b);
     this.waves = rounds.map((round) => ({
@@ -189,9 +200,15 @@ export class Arena {
       el.style.cssText = `left:${c.x}%;top:${c.y}%;width:${c.w}%;height:${c.h}%`;
     });
 
+    const landed = [];
+    const fallen = [];
     for (const slot of slots) {
       const el = this.nodes.get(slot.id);
       if (!el) continue;
+      if (slot.state === 'dead' && !this.audio.dead.has(slot.id)) {
+        this.audio.dead.add(slot.id);
+        fallen.push(slot.id);
+      }
       el.style.left = `${slot.x}%`;
       el.style.top = `${slot.y}%`;
       el.style.width = `${slot.size}px`;
@@ -220,6 +237,7 @@ export class Arena {
       const dmg = el.querySelector('.dmg');
       if (slot.hit && this.lastHitKey.get(slot.id) !== slot.hit.key) {
         this.lastHitKey.set(slot.id, slot.hit.key);
+        landed.push(slot.hit);
         dmg.textContent = `-${slot.hit.dmg}${slot.hit.crit ? '!' : ''}`;
         dmg.className = slot.hit.crit ? 'dmg crit' : 'dmg';
         dmg.classList.remove('pop');
@@ -238,8 +256,42 @@ export class Arena {
       }
     }
 
+    this.sound(elapsed, landed, fallen);
     this.hud(slots, elapsed);
     this.ranks(elapsed);
+  }
+
+  /**
+   * Turns this frame's events into noise, sparingly.
+   *
+   * Twelve duels landing blows across the same three seconds is dozens of hits
+   * a second; played straight it is white noise and the room stops hearing any
+   * of it. One hit sound per HIT_GAP_MS, and a critical outranks a plain blow
+   * competing for the same slot — so what you hear is the shape of the fight
+   * rather than all of it.
+   */
+  sound(elapsed, landed, fallen) {
+    const waveIndex = this.waves.filter((w) => elapsed >= w.at).length - 1;
+
+    if (!this.audio.primed) {
+      this.audio.primed = true;
+      this.audio.wave = waveIndex;
+      return;
+    }
+
+    if (waveIndex > this.audio.wave) {
+      this.audio.wave = waveIndex;
+      const isFinal = waveIndex === this.waves.length - 1;
+      if (waveIndex >= 0) (isFinal ? sfx.duel : sfx.wave)();
+    }
+
+    if (landed.length && elapsed - this.audio.lastHitAt >= HIT_GAP_MS) {
+      this.audio.lastHitAt = elapsed;
+      sfx.hit(landed.some((h) => h.crit));
+    }
+
+    // A death is rarer and matters more, so it is never dropped.
+    if (fallen.length) sfx.down();
   }
 
   hud(slots, elapsed) {

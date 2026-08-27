@@ -82,6 +82,32 @@ export const sfx = {
     [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => blip(f, 0.18), i * 110));
   },
   type: () => blip(1400, 0.015, 'square', 0.02),
+
+  // ---- the arena. Lower and shorter than the menu blips: these land dozens
+  // of times across a tournament, and anything bright enough for a button
+  // becomes unbearable at that rate through a hall's speakers.
+  hit: (crit = false) => {
+    if (crit) {
+      blip(330, 0.13, 'square', 0.05);
+      setTimeout(() => blip(170, 0.12, 'sawtooth', 0.045), 45);
+    } else {
+      blip(190, 0.07, 'square', 0.03);
+    }
+  },
+  /** A fighter drops. */
+  down: () => {
+    blip(300, 0.09, 'sawtooth', 0.04);
+    setTimeout(() => blip(150, 0.2, 'sawtooth', 0.04), 85);
+  },
+  /** A new round walks onto the field. */
+  wave: () => {
+    blip(110, 0.24, 'square', 0.05);
+    setTimeout(() => blip(165, 0.18, 'square', 0.04), 130);
+  },
+  /** The last two left. */
+  duel: () => {
+    [440, 587, 440, 659].forEach((f, i) => setTimeout(() => blip(f, 0.22, 'square', 0.05), i * 170));
+  },
   isMuted: () => muted,
   toggle() {
     muted = !muted;
