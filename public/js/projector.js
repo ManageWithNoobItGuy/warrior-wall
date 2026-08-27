@@ -86,7 +86,11 @@ async function syncGame(revealPayload) {
 
 // ------------------------------------------------------------------ painting
 
-const GAME_VIEWS = new Set(['question', 'reveal', 'stance', 'battle']);
+const GAME_VIEWS = new Set(['question', 'reveal', 'stance', 'battle', 'done']);
+
+/** How long the champion keeps the battlefield before the board takes over. */
+const CHAMPION_DWELL = 7000;
+let resultsAt = 0;
 
 function paint() {
   // A live game outranks the wall: whatever the room is doing right now is
@@ -104,10 +108,12 @@ function teardownArena() {
   arena?.destroy();
   arena = null;
   arenaKey = null;
+  resultsAt = 0;
 }
 
 async function paintGame() {
   if (game.phase === 'battle') return paintBattle();
+  if (game.phase === 'done') return paintResults();
 
   teardownArena();
   clearTimeout(typing);
@@ -221,6 +227,113 @@ async function paintBattle() {
   arena = new Arena(screen.firstElementChild, battle);
   arena.start();
   arenaKey = game.battleStartedAt;
+  sfx.fanfare();
+}
+
+/**
+ * The end of the lesson's tournament, as a board a whole room can read.
+ *
+ * Two orders of merit, because the arena deliberately does not settle the
+ * quiz: answering well buys stats, not victory, so the student who knew the
+ * most and the student left standing are often different people and both
+ * deserve their name up.
+ *
+ * The champion keeps the battlefield for a moment first — that beat is the
+ * point of the show. A projector that connects after it is all over has no
+ * banner to wait for and goes straight to the board.
+ */
+async function paintResults() {
+  if (arena?.finished) {
+    if (!resultsAt) resultsAt = Date.now() + CHAMPION_DWELL;
+    if (Date.now() < resultsAt) {
+      renderChampionOverlay();
+      clearTimeout(typing);
+      typing = setTimeout(() => {
+        if (game.phase === 'done') paint();
+      }, resultsAt - Date.now() + 50);
+      return;
+    }
+  }
+
+  if (screen.querySelector('.results-board')) return;
+
+  const [{ battle }, roster] = await Promise.all([
+    api('/api/game/battle'),
+    api('/api/game/roster').catch(() => ({ players: [] })),
+  ]);
+  if (!battle) return;
+
+  teardownArena();
+
+  const byId = new Map(battle.fighters.map((f) => [f.playerId, f]));
+  const arenaRows = [...battle.result.ranking]
+    .sort((a, b) => a.rank - b.rank)
+    .slice(0, 8)
+    .map((entry) => {
+      const fighter = byId.get(entry.playerId);
+      return {
+        rank: entry.rank,
+        name: fighter?.name ?? entry.playerId,
+        job: fighter?.classId ?? '',
+        detail: `${entry.damageDealt} DMG`,
+      };
+    });
+
+  // Most correct wins; a tie goes to the one who needed fewer questions to get
+  // there, then to points, so the order is never arbitrary.
+  const quizRows = (roster.players ?? [])
+    .filter((p) => (p.answered ?? 0) > 0)
+    .sort(
+      (a, b) =>
+        (b.correct ?? 0) - (a.correct ?? 0) ||
+        (a.answered ?? 0) - (b.answered ?? 0) ||
+        (b.score ?? 0) - (a.score ?? 0),
+    )
+    .slice(0, 8)
+    .map((player, i) => ({
+      rank: i + 1,
+      name: player.name,
+      job: player.job ?? '',
+      detail: `${player.correct ?? 0}/${player.answered ?? 0}`,
+    }));
+
+  const table = (title, rows, empty) => `
+    <div class="results-col">
+      <b class="results-head pixel">${title}</b>
+      ${
+        rows.length
+          ? `<ol class="results-list">${rows
+              .map(
+                (row) => `
+          <li class="${row.rank === 1 ? 'is-first' : ''}">
+            <span class="results-rank">${row.rank}</span>
+            <span class="results-name">${escapeHtml(row.name)}</span>
+            <span class="results-job" data-job="${escapeHtml(row.job)}">${escapeHtml(
+              row.job.toUpperCase(),
+            )}</span>
+            <span class="results-detail">${escapeHtml(row.detail)}</span>
+          </li>`,
+              )
+              .join('')}</ol>`
+          : `<p class="results-empty">${empty}</p>`
+      }
+    </div>`;
+
+  const champion = byId.get(battle.result.championId);
+  const sharpest = quizRows[0];
+
+  screen.innerHTML = `
+    <div class="results-board">
+      <b class="results-title pixel">FINAL RESULTS</b>
+      <div class="results-cols">
+        ${table('ARENA', arenaRows, 'No tournament was run.')}
+        ${table('QUIZ', quizRows, 'No questions were asked.')}
+      </div>
+      <div class="results-crowns">
+        ${champion ? `<span>CHAMPION <b>${escapeHtml(champion.name)}</b></span>` : ''}
+        ${sharpest ? `<span>SHARPEST <b>${escapeHtml(sharpest.name)}</b></span>` : ''}
+      </div>
+    </div>`;
   sfx.fanfare();
 }
 

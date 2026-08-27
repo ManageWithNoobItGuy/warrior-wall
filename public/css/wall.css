@@ -773,3 +773,125 @@ body.projector {
     justify-content: flex-start;
   }
 }
+
+/* ------------------------------------------------- the end-of-battle board */
+
+/* Sized in vw/vh throughout: this is read from the back of a classroom, not
+   from a laptop, and the only thing that matters is how big it lands on the
+   wall. */
+.results-board {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  /* Three auto rows, not `auto 1fr auto`: a stretching middle row pinned the
+     tables to the top and left a dead band above the names at the foot. The
+     board reads as one block in the middle of the wall instead. */
+  grid-template-rows: auto auto auto;
+  gap: clamp(10px, 2vh, 28px);
+  padding: clamp(14px, 3vh, 44px) clamp(16px, 3vw, 56px);
+  background: linear-gradient(180deg, #131347, #07071c);
+  align-content: center;
+}
+
+.results-title {
+  font-family: var(--font-pixel);
+  font-size: clamp(16px, 2.2vw, 36px);
+  color: var(--gold);
+  letter-spacing: 0.2em;
+  text-align: center;
+}
+
+.results-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(16px, 3vw, 56px);
+  align-content: start;
+}
+
+.results-head {
+  display: block;
+  font-family: var(--font-pixel);
+  font-size: clamp(12px, 1.5vw, 24px);
+  color: var(--cyan);
+  letter-spacing: 0.18em;
+  padding-bottom: clamp(6px, 1vh, 14px);
+  border-bottom: 3px solid var(--edge);
+  margin-bottom: clamp(6px, 1.2vh, 16px);
+}
+
+.results-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: clamp(4px, 0.8vh, 12px);
+}
+
+.results-list li {
+  display: grid;
+  grid-template-columns: clamp(24px, 2.4vw, 44px) 1fr auto auto;
+  align-items: baseline;
+  gap: clamp(6px, 1vw, 18px);
+  padding: clamp(3px, 0.6vh, 9px) clamp(6px, 0.8vw, 14px);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* The winner of each order of merit, not just the top row of a list. */
+.results-list li.is-first {
+  background: rgba(255, 215, 94, 0.14);
+  outline: 3px solid rgba(255, 215, 94, 0.5);
+}
+
+.results-rank,
+.results-detail {
+  font-family: var(--font-pixel);
+  font-size: clamp(10px, 1.1vw, 19px);
+  color: var(--ink-dim);
+}
+
+.results-list li.is-first .results-rank,
+.results-list li.is-first .results-detail {
+  color: var(--gold);
+}
+
+.results-name {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: clamp(15px, 1.9vw, 34px);
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.results-job {
+  font-family: var(--font-pixel);
+  font-size: clamp(8px, 0.9vw, 15px);
+  color: var(--ink-dim);
+}
+
+.results-empty {
+  font-family: var(--font-pixel);
+  font-size: clamp(10px, 1vw, 17px);
+  color: var(--ink-dim);
+}
+
+.results-crowns {
+  display: flex;
+  justify-content: center;
+  gap: clamp(16px, 4vw, 72px);
+  font-family: var(--font-pixel);
+  font-size: clamp(10px, 1.2vw, 20px);
+  color: var(--ink-dim);
+  letter-spacing: 0.12em;
+}
+
+.results-crowns b {
+  color: var(--gold);
+}
+
+@media (max-width: 700px) {
+  .results-cols {
+    grid-template-columns: 1fr;
+  }
+}
