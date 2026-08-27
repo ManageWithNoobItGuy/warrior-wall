@@ -101,8 +101,24 @@ try {
   console.log('\n=== a different student');
   ok(Cf.pledgeBtn && !Cf.note, 'still invited to pledge');
 
+  // ---- the wall lists the room, and a member who pledged shows as their card
+  //      rather than appearing twice.
+  const wall = await openPage(`${B}/wall`, { fresh: true });
+  await sleep(2500);
+  const panel = JSON.parse(await wall.evaluate(`JSON.stringify({
+    cards: [...document.querySelectorAll('#roster .card:not(.card--character)')]
+      .map(el => el.querySelector('.card-name small')?.textContent.trim()),
+    characters: [...document.querySelectorAll('#roster .card--character')]
+      .map(el => el.querySelector('.card-name small')?.textContent.trim()) })`));
+  const all = [...panel.cards, ...panel.characters];
+  console.log('\n=== PARTY MEMBERS');
+  ok(panel.cards.includes('8001'), `the student who pledged shows as a card (${panel.cards.join(', ')})`);
+  ok(!panel.characters.includes('8001'), 'and not also as a member tile');
+  ok(all.filter(id => id === '8001').length === 1, 'listed exactly once');
+  ok(panel.characters.includes('8002'), `the student who has not pledged is still listed (${panel.characters.join(', ')})`);
+
   for (const e of [...errors(a.logs),...errors(b.logs),...errors(c.logs)].filter(x=>!x.text.includes('404')))
     console.log('  ! console:', e.text.split('\n')[0]);
-  a.close(); b.close(); c.close();
+  a.close(); b.close(); c.close(); wall.close();
 } finally { chrome.kill(); }
 console.log(fail.length?`\nFAILED ${fail.length}`:'\nALL CHECKS PASSED');

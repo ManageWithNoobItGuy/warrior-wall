@@ -9,6 +9,7 @@ const countEl = document.getElementById('count');
 const titleInput = document.getElementById('title');
 
 let posters = [];
+let party = [];        // everyone who has made a character, pledged or not
 let featuredId = null;
 
 wireSounds();
@@ -27,6 +28,7 @@ async function boot() {
   featuredId = state.featuredId;
   setJoinUrl(state.joinUrl);
   posters = (await api('/api/posters')).posters;
+  await loadParty();
   render();
   loadSessions();
 
@@ -36,6 +38,19 @@ async function boot() {
       render(poster.id);
       sfx.fanfare();
       toast(`A NEW CHALLENGER! ${poster.name}`);
+    },
+    // A character was created, or one changed class. The panel lists the room,
+    // not just the cards, so it has to redraw for this too — the event carries
+    // only a count, so the roster is fetched again.
+    roster: () => {
+      loadParty().then(() => render());
+    },
+    portrait: () => {
+      loadParty().then(() => render());
+    },
+    gameReset: () => {
+      party = [];
+      render();
     },
     removed: ({ id }) => {
       posters = posters.filter((p) => p.id !== id);
@@ -49,7 +64,7 @@ async function boot() {
     cleared: () => {
       posters = [];
       featuredId = null;
-      render();
+      loadParty().then(() => render());
     },
     renamed: ({ title }) => {
       titleInput.value = title;
@@ -58,9 +73,11 @@ async function boot() {
     session: ({ title }) => {
       titleInput.value = title;
       posters = [];
+      party = [];
       featuredId = null;
       render();
       loadSessions();
+      loadParty().then(() => render());
     },
   });
 }
@@ -81,14 +98,75 @@ function setJoinUrl(url) {
   };
 }
 
+/** Everyone in the room, whether or not they have sent a card. */
+async function loadParty() {
+  try {
+    party = (await api('/api/game/roster')).players ?? [];
+  } catch {
+    // The card wall is the thing that must not break; a room that cannot be
+    // reached simply contributes nobody.
+    party = [];
+  }
+}
+
+/**
+ * The panel lists the room, and a member's tile becomes their card once they
+ * send one.
+ *
+ * It used to list cards alone. That was fine when the pledge came first, but
+ * the pledge now waits for the battle — so an instructor spent the whole
+ * lesson looking at WAITING FOR CHALLENGERS with a full room in front of them.
+ */
+function partyTiles() {
+  const carded = new Map(posters.map((poster) => [String(poster.studentId), poster]));
+  const tiles = posters.map((poster) => ({ kind: 'card', poster }));
+  for (const player of party) {
+    if (carded.has(String(player.studentId))) continue;
+    tiles.push({ kind: 'character', player });
+  }
+  return tiles;
+}
+
+function characterTile(player) {
+  const face = player.hasPortrait
+    ? `<img src="/av/${encodeURIComponent(player.studentId)}.jpg?v=${player.portraitAt ?? 0}"
+           alt="" loading="lazy" class="party-face" />`
+    : `<div class="party-face party-face--none">${escapeHtml(
+        (player.name ?? '?').trim().charAt(0).toUpperCase() || '?',
+      )}</div>`;
+  return `
+      <article class="card card--character" data-student="${escapeHtml(player.studentId)}">
+        ${face}
+        <div class="card-bar">
+          <span class="card-name">${escapeHtml(player.name)}<small>${escapeHtml(
+            player.studentId,
+          )}</small></span>
+        </div>
+        <div class="party-meta">
+          <span class="party-job" data-job="${escapeHtml(player.job ?? '')}">${escapeHtml(
+            (player.job ?? '—').toUpperCase(),
+          )}</span>
+          <span class="spacer"></span>
+          <span class="party-score">${player.score ?? 0} PTS</span>
+        </div>
+      </article>`;
+}
+
 function render(newId = null) {
-  countEl.textContent = posters.length;
-  emptyState.hidden = posters.length > 0;
+  const tiles = partyTiles();
+  countEl.textContent = tiles.length;
+  emptyState.hidden = tiles.length > 0;
   document.getElementById('zip').classList.toggle('is-disabled', !posters.length);
 
-  roster.innerHTML = posters
-    .map(
-      (poster) => `
+  roster.innerHTML = tiles
+    .map((tile) =>
+      tile.kind === 'character' ? characterTile(tile.player) : cardTile(tile.poster, newId),
+    )
+    .join('');
+}
+
+function cardTile(poster, newId) {
+  return `
       <article class="card ${poster.id === featuredId ? 'is-featured' : ''} ${
         poster.id === newId ? 'is-new' : ''
       }" data-id="${poster.id}">
@@ -107,9 +185,7 @@ function render(newId = null) {
           )}.png" title="Download">⬇</a>
           <button class="btn--sm btn--danger" data-action="delete" title="Delete">✕</button>
         </div>
-      </article>`,
-    )
-    .join('');
+      </article>`;
 }
 
 roster.addEventListener('click', async (event) => {
