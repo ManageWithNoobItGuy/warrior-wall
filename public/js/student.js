@@ -783,6 +783,9 @@ function applyPledgeState() {
 }
 
 document.getElementById('leave-character').addEventListener('click', async () => {
+  // Two steps, deliberately saying different things: the first is what is lost,
+  // the second is who is being lost. A repeat of the same sentence teaches
+  // people to tap through both without reading either.
   const sure = await askConfirm({
     title: 'DELETE MY CHARACTER',
     message:
@@ -791,6 +794,15 @@ document.getElementById('leave-character').addEventListener('click', async () =>
     danger: true,
   });
   if (!sure) return;
+
+  const who = play.player?.name || value('name') || 'this character';
+  const really = await askConfirm({
+    title: 'ARE YOU SURE?',
+    message: `Last chance — delete ${who} for good?`,
+    confirmLabel: 'YES, DELETE',
+    danger: true,
+  });
+  if (!really) return;
   try {
     const result = await leaveCharacter();
     if (result?.error) return fail(result.error);

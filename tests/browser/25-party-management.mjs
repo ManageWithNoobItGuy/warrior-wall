@@ -48,7 +48,10 @@ try {
   await post('/api/game/reset');
   await post('/api/session/clear');
 
-  const a = await openPage(`${B}/`, { fresh: true });
+  // autoDialog off so the two DELETE confirmations can be driven one at a time.
+  // Safe here because makeCharacter supplies a photo, so the "no photo" confirm
+  // that the helper normally exists to answer never fires.
+  const a = await openPage(`${B}/`, { fresh: true, autoDialog: false });
   await sleep(2400);
   await makeCharacter(a, '7501', 'Anucha Wong', 'warrior');
   const b = await openPage(`${B}/`, { fresh: true });
@@ -97,13 +100,39 @@ try {
      `their portrait was deleted too (${portraitBefore} -> ${portraitAfter})`);
 
   // ---- a student gives up their own character
-  const canLeave = await a.evaluate(`!document.getElementById('leave-character').hidden`);
+  const btn = JSON.parse(await a.evaluate(`(()=>{
+    const b=document.getElementById('leave-character');
+    return JSON.stringify({ shown: !b.hidden, cls: b.className });
+  })()`));
   console.log("\n=== the student's own button");
-  ok(canLeave, 'DELETE MY CHARACTER is offered before the battle');
+  ok(btn.shown, 'DELETE MY CHARACTER is offered before the battle');
+  ok(/btn--danger/.test(btn.cls), `and it reads as destructive (${btn.cls})`);
 
-  // This page keeps the helper's auto-accept — it needs it for the no-photo
-  // confirm during setup — so the DELETE confirm is answered for us.
+  const dialogTitle = `(()=>{
+    const d=document.querySelector('dialog.app-dialog[open]');
+    return d ? d.querySelector('.window-title').textContent.trim() : 'none';
+  })()`;
+
+  // ---- backing out of the second confirmation must keep the character
   await a.evaluate(`document.getElementById('leave-character').click()`);
+  await sleep(600);
+  ok(await a.evaluate(dialogTitle) === 'DELETE MY CHARACTER', 'the first confirmation asks what is lost');
+  await a.evaluate(`document.querySelector('dialog.app-dialog[open] [data-ok]').click()`);
+  await sleep(600);
+  ok(await a.evaluate(dialogTitle) === 'ARE YOU SURE?', 'a second confirmation asks again');
+  ok((await roster()).players.some(p=>String(p.studentId)==='7501'),
+     'nothing has been deleted yet — the second dialog is a real gate');
+  await a.evaluate(`document.querySelector('dialog.app-dialog[open] [data-cancel]').click()`);
+  await sleep(1200);
+  ok((await roster()).players.some(p=>String(p.studentId)==='7501'),
+     'cancelling the second confirmation keeps the character');
+
+  // ---- and going through with both does delete it
+  await a.evaluate(`document.getElementById('leave-character').click()`);
+  await sleep(600);
+  await a.evaluate(`document.querySelector('dialog.app-dialog[open] [data-ok]').click()`);
+  await sleep(600);
+  await a.evaluate(`document.querySelector('dialog.app-dialog[open] [data-ok]').click()`);
   await sleep(3500);
   const roomEmpty = await roster();
   ok(roomEmpty.count === 0, `the room is empty again (${roomEmpty.count})`);
