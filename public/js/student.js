@@ -4,7 +4,7 @@ import {
   createCharacter,
   lookupCharacter,
   refresh as refreshPlay,
-  battleFinished,
+  pledgeIsOpen,
   leaveCharacter,
   canLeave,
   playEvents,
@@ -113,6 +113,16 @@ api('/api/state')
 // The room speaks to every page over one stream; the arena view reacts to it.
 connectEvents({
   ...playEvents,
+  // The instructor has opened pledging: take this phone there rather than
+  // leaving a new button on screen for its owner to notice.
+  pledge: async () => {
+    await refreshPlay();
+    applyPledgeState();
+    if (state.pledged || !play.player) return;
+    if (state.step === 3) show(4);
+    sfx.confirm();
+    toast('Time to write your card!');
+  },
   renamed: ({ title }) => {
     state.session = { ...state.session, title };
     sessionLabel.textContent = `QUEST: ${String(title).toUpperCase()}`;
@@ -135,7 +145,7 @@ connectEvents({
  * soon as the pledge opens — which is also the moment MY PLEDGE ▶ does.
  */
 function visibleSteps() {
-  if (state.pledged || battleFinished()) return STEP_COUNT;
+  if (state.pledged || pledgeIsOpen()) return STEP_COUNT;
   return Math.max(ARENA_STEP + 1, state.step + 1);
 }
 
@@ -771,7 +781,7 @@ let previousCard = null;
  */
 function applyPledgeState() {
   const done = Boolean(state.pledged);
-  const open = battleFinished();
+  const open = pledgeIsOpen();
   document.getElementById('to-pledge').hidden = done || !open;
   document.getElementById('pledged-note').hidden = !done;
   document.getElementById('view-card').hidden = !done;

@@ -40,6 +40,10 @@ const EMPTY_GAME = {
   stanceOpenedAt: null,
   battleStartedAt: null,
   battleTotalMs: 0,
+  /** The instructor has sent the room to write their cards. Deliberately not a
+   *  phase: pledging runs alongside whatever the arena is doing, and a class
+   *  that never fights still has to be able to pledge. */
+  pledgeOpen: false,
 };
 
 export class WallHub {
@@ -128,6 +132,8 @@ export class WallHub {
         return json(await this.backToLobby());
       case '/admin/reset':
         return json(await this.reset(body));
+      case '/admin/pledge':
+        return json(await this.openPledge());
       case '/admin/player-rename':
         return json(await this.renamePlayer(body));
       case '/admin/player-remove':
@@ -327,6 +333,22 @@ export class WallHub {
     // The upload finishes after the sheet has already been drawn. Nothing else
     // would tell that page to look again.
     this.broadcast('portrait', { studentId: player.studentId, portraitAt: player.portraitAt });
+    return { ok: true };
+  }
+
+  /**
+   * Sends the room off to write their cards.
+   *
+   * One way only, and not tied to the battle: an instructor who never runs a
+   * tournament still has a class to send to the wall, and one who does gets to
+   * choose the moment rather than losing half the room to a form the instant
+   * the champion is named.
+   */
+  async openPledge() {
+    if (this.game.pledgeOpen) return { ok: true, alreadyOpen: true };
+    this.game.pledgeOpen = true;
+    await this.saveGame();
+    this.broadcast('pledge', { open: true });
     return { ok: true };
   }
 
@@ -704,6 +726,7 @@ export class WallHub {
     const g = this.game;
     return {
       phase: g.phase,
+      pledgeOpen: Boolean(g.pledgeOpen),
       sessionId: g.sessionId,
       questionIndex: g.questionIndex,
       questionTotal: g.questionTotal,

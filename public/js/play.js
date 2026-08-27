@@ -118,6 +118,17 @@ export async function lookupCharacter({ sessionId, studentId }) {
 }
 
 /**
+ * Has the instructor sent the room off to write their cards?
+ *
+ * This, and not the end of the battle, is what opens the pledge. The two were
+ * the same thing until a class that ran no tournament at all turned out to
+ * have no way to reach the wall.
+ */
+export function pledgeIsOpen() {
+  return Boolean(play.game?.pledgeOpen);
+}
+
+/**
  * Has the tournament actually finished?
  *
  * The room has no idea when the show is over — the timeline does. Rather than
@@ -645,6 +656,7 @@ export const playEvents = {
   portrait: ({ studentId }) => {
     if (studentId && String(studentId) === String(play.identity?.studentId)) refresh();
   },
+  pledge: () => refresh(),
   battle: () => refresh(),
   phase: () => refresh(),
   gameReset: () => {

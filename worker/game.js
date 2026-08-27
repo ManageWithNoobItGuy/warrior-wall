@@ -265,6 +265,10 @@ export async function gameRoutes(request, env, ctx, url, isInstructor) {
       return relay(await callHub(env, session.id, '/admin/reset', { body: { sessionId: session.id } }));
     }
 
+    if (path === '/api/game/pledge/open') {
+      return relay(await callHub(env, session.id, '/admin/pledge', { body: {} }));
+    }
+
     if (path === '/api/game/player/rename') {
       return relay(
         await callHub(env, session.id, '/admin/player-rename', {

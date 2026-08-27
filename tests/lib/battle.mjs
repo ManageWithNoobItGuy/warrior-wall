@@ -34,3 +34,19 @@ export async function runBattleToEnd(base, { partnerId = '9999', job = 'warrior'
   await sleep(total + 3000);
   return total;
 }
+
+/**
+ * Sends the room off to write their cards.
+ *
+ * The pledge is not opened by the end of a battle but by the instructor, so
+ * any suite that needs MY PLEDGE ▶ has to ask for it — with or without a
+ * tournament having been run.
+ */
+export async function openPledging(base) {
+  await fetch(`${base}/api/game/pledge/open`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+  });
+  await sleep(1200);
+}

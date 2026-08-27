@@ -1,5 +1,5 @@
 import { launch, openPage, errors } from '../lib/cdp.mjs';
-import { runBattleToEnd } from '../lib/battle.mjs';
+import { runBattleToEnd, openPledging } from '../lib/battle.mjs';
 import { setTimeout as sleep } from 'node:timers/promises';
 const B='http://127.0.0.1:8799';
 const post=(p,b)=>fetch(B+p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b??{})}).then(r=>r.json());
@@ -27,7 +27,11 @@ async function makeCharacter(page, id, name, job) {
 }
 
 async function sendPledge(page) {
-  await page.evaluate(`document.getElementById('to-pledge').click()`); await sleep(600);
+  // Only if the phone has not already been sent there by OPEN PLEDGING.
+  await page.evaluate(`(()=>{
+    const onArena = !document.querySelector('.step[data-step="3"]').hidden;
+    if (onArena) document.getElementById('to-pledge').click();
+  })()`); await sleep(600);
   await page.evaluate(`
     document.querySelectorAll('#takeaways textarea')[0].value='Durable Objects hold the room';
     document.querySelector('[data-step="4"] [data-next]').click();`); await sleep(600);
@@ -53,10 +57,14 @@ try {
 
   // Everyone who fights has to be in the room before this.
   await runBattleToEnd(B, { partnerId: '8003' });
+  // The instructor decides when the room writes; a finished battle does not.
+  await openPledging(B);
 
   const A = await footer(a);
-  console.log('\n=== after the battle');
-  ok(A.step === 3 && A.pledgeBtn && !A.note, 'MY PLEDGE is offered');
+  console.log('\n=== after the instructor opens pledging');
+  // The phone takes itself to the takeaways rather than waiting to be tapped.
+  ok(A.step === 4, `the student is writing their card (step ${A.step})`);
+  ok(A.pledgeBtn && !A.note, 'and is still invited to pledge, not shown a receipt');
 
   // ---- send it
   await sendPledge(a);

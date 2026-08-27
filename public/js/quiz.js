@@ -103,6 +103,9 @@ function render() {
   el('gm-next').disabled = live || gm.cursor >= gm.questions.length - 1;
   el('gm-stance').disabled = live || !g.players;
   el('gm-battle').disabled = live || (g.players ?? 0) < 2;
+  // One way only, so once the room is writing there is nothing left to press.
+  el('gm-pledge').disabled = Boolean(g.pledgeOpen) || !g.players;
+  el('gm-pledge').textContent = g.pledgeOpen ? 'PLEDGING IS OPEN' : 'OPEN PLEDGING';
 
   el('gm-hint').textContent =
     (g.players ?? 0) < 2
@@ -298,6 +301,22 @@ el('gm-stance').addEventListener('click', async () => {
     await loadGame();
     render();
     toast('Students can pick their stance now.');
+  });
+});
+
+el('gm-pledge').addEventListener('click', async () => {
+  const go = await askConfirm({
+    title: 'OPEN PLEDGING',
+    message:
+      'Every phone in the room moves to KEY TAKEAWAYS now. Do this once the battle is over — it cannot be undone.',
+    confirmLabel: 'OPEN IT',
+  });
+  if (!go) return;
+  await guarded('Could not open pledging', async () => {
+    await api('/api/game/pledge/open', { method: 'POST', body: '{}' });
+    await loadGame();
+    render();
+    toast('The room is writing their cards.');
   });
 });
 

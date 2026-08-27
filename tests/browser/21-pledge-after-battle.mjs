@@ -1,15 +1,17 @@
 /**
- * The pledge belongs after the tournament.
+ * The pledge is opened by the instructor, and by nothing else.
  *
  * MY PLEDGE ▶ used to sit in the arena from the moment a character existed,
- * which invited students to go and write their takeaways while questions were
- * still being asked. It now appears only once the battle has finished.
+ * which invited students to write their takeaways while questions were still
+ * being asked. Gating it on the end of the battle fixed that but left a class
+ * that runs no tournament unable to reach the wall at all. The room now waits
+ * for OPEN PLEDGING.
  *
- * The end of a battle is not broadcast — each screen works it out from
- * startedAt + totalMs — so this suite runs a real battle and waits it out
- * rather than asserting against a faked clock.
+ * A real battle is run and waited out rather than faking a clock, because the
+ * point of the suite is that finishing one is *not* what opens the pledge.
  */
 import { launch, openPage, errors } from '../lib/cdp.mjs';
+import { openPledging } from '../lib/battle.mjs';
 import { setTimeout as sleep } from 'node:timers/promises';
 const B='http://127.0.0.1:8799';
 const post=(p,b)=>fetch(B+p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b??{})}).then(r=>r.json());
@@ -85,11 +87,24 @@ try {
   console.log('\n=== once the battle is over');
   ok(serverPhase === 'done', `the room itself moved to done (server phase: ${serverPhase})`);
   ok(done.view === 'done', `the arena shows the result (${done.view})`);
-  ok(done.pledge, 'MY PLEDGE ▶ is now offered');
-  ok(done.dots === 7, `the pledge steps appear on the dots (${done.dots} dots)`);
+  ok(!done.pledge, 'a finished battle still does not open the pledge');
+  ok(done.dots === 4, `the run is still advertised as four steps (${done.dots} dots)`);
+
+  // ---- the instructor sends the room to write
+  await openPledging(B);
+  await sleep(1500);
+  const opened = JSON.parse(await p.evaluate(NAV));
+  console.log('\n=== once the instructor opens pledging');
+  ok(opened.pledge, 'MY PLEDGE ▶ is offered');
+  ok(opened.dots === 7, `the pledge steps appear on the dots (${opened.dots} dots)`);
+  ok(opened.step === 4, `and the phone went there by itself (step ${opened.step})`);
   await p.screenshot((process.env.SHOT_DIR ?? '/tmp') + '/pledge-after-battle.png');
 
   // ---- and it still leads where it always did
+  // Back to the arena, and MY PLEDGE ▶ must still be a real, clickable route
+  // in rather than merely present in the DOM.
+  await p.evaluate(`document.querySelector('[data-step="4"] [data-back]').click()`);
+  await sleep(800);
   const clicked = await p.evaluate(`(()=>{
     const b=document.getElementById('to-pledge');
     if (b.hidden || !b.offsetParent) return 'not visible';
