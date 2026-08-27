@@ -101,6 +101,7 @@ function render() {
   el('gm-close').disabled = !live;
   el('gm-prev').disabled = live || gm.cursor <= 0;
   el('gm-next').disabled = live || gm.cursor >= gm.questions.length - 1;
+  renderPicker(live);
   el('gm-stance').disabled = live || !g.players;
   el('gm-battle').disabled = live || (g.players ?? 0) < 2;
   // One way only, so once the room is writing there is nothing left to press.
@@ -133,6 +134,31 @@ function renderBoard() {
 }
 
 // ------------------------------------------------------------------ editor
+
+/**
+ * The question chooser.
+ *
+ * Rebuilt only when the bank itself changes — replacing the options on every
+ * render would close the dropdown under the instructor's cursor while they
+ * were reading it.
+ */
+function renderPicker(live) {
+  const pick = el('gm-pick');
+  const signature = gm.questions.map((q) => q.text).join('\u0000');
+  if (pick.dataset.signature !== signature) {
+    pick.dataset.signature = signature;
+    pick.innerHTML = gm.questions.length
+      ? gm.questions
+          .map((q, i) => {
+            const text = q.text.length > 64 ? `${q.text.slice(0, 63)}…` : q.text;
+            return `<option value="${i}">Q${i + 1} · ${escapeHtml(text)}</option>`;
+          })
+          .join('')
+      : '<option value="">No questions yet</option>';
+  }
+  pick.value = gm.questions.length ? String(gm.cursor) : '';
+  pick.disabled = live || !gm.questions.length;
+}
 
 /**
  * The bank is edited as plain inputs and saved whole.
@@ -302,6 +328,13 @@ el('gm-stance').addEventListener('click', async () => {
     render();
     toast('Students can pick their stance now.');
   });
+});
+
+el('gm-pick').addEventListener('change', (event) => {
+  const index = Number(event.target.value);
+  if (!Number.isInteger(index) || !gm.questions[index]) return;
+  gm.cursor = index;
+  render();
 });
 
 el('gm-pledge').addEventListener('click', async () => {

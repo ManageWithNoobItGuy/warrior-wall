@@ -74,7 +74,14 @@
 
         <div class="gm-run">
           <p class="gm-current" id="gm-current">Add some questions below, then open the first one.</p>
+          <!-- Jump straight to any question. The arrows either side still step
+               one at a time; this is for the moment a class goes somewhere the
+               running order did not expect. -->
           <div class="row">
+            <label class="gm-pick-label" for="gm-pick">ASK</label>
+            <select id="gm-pick" class="gm-pick" title="Choose which question to open next"></select>
+          </div>
+          <div class="row" style="margin-top: 10px">
             <button id="gm-prev" class="btn--ghost btn--sm">◀</button>
             <button id="gm-open" class="btn--primary">OPEN QUESTION</button>
             <button id="gm-close" class="btn--primary">CLOSE &amp; REVEAL</button>

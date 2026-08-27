@@ -895,3 +895,32 @@ body.projector {
     grid-template-columns: 1fr;
   }
 }
+
+/* -------------------------------------------------- the question chooser */
+
+.gm-pick-label {
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: var(--ink-dim);
+  letter-spacing: 0.12em;
+  align-self: center;
+}
+
+/* Wide enough to read a question in, but never wider than the panel — a long
+   question must not push the run controls off the side. */
+.gm-pick {
+  flex: 1;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 38px;
+  padding: 6px 10px;
+  border: 3px solid var(--edge);
+  background: #10102e;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+}
+
+.gm-pick:disabled {
+  opacity: 0.45;
+}
