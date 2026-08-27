@@ -108,7 +108,46 @@ try {
   console.log(`  · drawn at ${stack.w} CSS px on this viewport`);
   await p.screenshot((process.env.SHOT_DIR ?? '/tmp') + '/portrait-clarity.png');
 
-  for (const e of errors(p.logs).filter(x=>!x.text.includes('404'))) console.log('  ! console:', e.text.split('\n')[0]);
-  p.close();
+  // ---- and the instructor page carries no stripes at all
+  //
+  // A projector and a phone at arm's length suit the CRT dressing; the wall is
+  // dense forms read close up, and a question bank behind stripes is genuinely
+  // hard to read. Measured on a white input, where banding is most visible.
+  const wall = await openPage(`${B}/wall`, { fresh: true });
+  await sleep(2600);
+  await wall.evaluate(`(()=>{
+    const d=document.createElement('div');
+    d.id='stripe-probe';
+    d.style.cssText='position:fixed;left:40px;top:40px;width:120px;height:60px;background:#ffffff;z-index:1';
+    document.body.append(d);
+  })()`);
+  await sleep(300);
+  const probe = JSON.parse(await wall.evaluate(`(()=>{
+    const r=document.getElementById('stripe-probe').getBoundingClientRect();
+    return JSON.stringify({x:r.left+10, y:r.top+10, width:40, height:40});
+  })()`));
+  const wallShot = await wall.send('Page.captureScreenshot', {
+    format: 'png', clip: { ...probe, scale: 1 },
+  });
+  const wallBands = JSON.parse(await wall.evaluate(`(async()=>{
+    const img=new Image();
+    img.src='data:image/png;base64,${wallShot.result.data}';
+    await new Promise(r=>{img.onload=r;img.onerror=r;});
+    const c=document.createElement('canvas');
+    c.width=img.naturalWidth; c.height=img.naturalHeight;
+    const g=c.getContext('2d'); g.drawImage(img,0,0);
+    const d=g.getImageData(2,0,1,img.naturalHeight).data;
+    const col=[]; for(let i=0;i<img.naturalHeight;i++) col.push(d[i*4]);
+    return JSON.stringify({ min:Math.min(...col), max:Math.max(...col), rows:col.length });
+  })()`));
+  const wallSpread = wallBands.max - wallBands.min;
+  const bodyClass = await wall.evaluate(`document.body.className`);
+  console.log('\n=== the instructor page');
+  ok(/no-scanlines/.test(bodyClass), `the wall opts out of the overlay (body class "${bodyClass}")`);
+  ok(wallSpread === 0, `white stays white — no stripes at all (spread ${wallSpread} over ${wallBands.rows} rows)`);
+  await wall.evaluate(`document.getElementById('stripe-probe').remove()`);
+
+  for (const e of [...errors(p.logs),...errors(wall.logs)].filter(x=>!x.text.includes('404'))) console.log('  ! console:', e.text.split('\n')[0]);
+  p.close(); wall.close();
 } finally { chrome.kill(); }
 console.log(fail.length?`\nFAILED ${fail.length}`:'\nALL CHECKS PASSED');
