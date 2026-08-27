@@ -117,6 +117,10 @@ body.no-scanlines::after {
 .portrait-box,
 .preview-wrap img,
 .card img,
+/* The character sheet and the class preview: the two places a student looks
+   straight at their own face. Left out of this list originally, so the CRT
+   stripes ran across every portrait in the arena. */
+.sheet-portrait img,
 .proj-portrait img,
 .attract-strip img,
 .join img,

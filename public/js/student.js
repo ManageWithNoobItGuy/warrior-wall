@@ -893,8 +893,17 @@ createBtn.addEventListener('click', async () => {
   }
 });
 
+/**
+ * 512px, not the 256 this started at.
+ *
+ * The sheet draws the portrait at up to 172 CSS px, which is 344-516 real
+ * pixels on the phones students actually hold, and the projector's champion
+ * token is larger still. A 256px source was being upscaled everywhere it
+ * mattered, which is what made a carefully generated face look soft — the
+ * generator was never the problem.
+ */
 async function uploadPortrait(studentId) {
-  const blob = await canvasToBlob(squareCanvas(activeSource(), 256), 'image/jpeg', 0.8);
+  const blob = await canvasToBlob(squareCanvas(activeSource(), 512), 'image/jpeg', 0.86);
   const res = await fetch(`/av/${encodeURIComponent(studentId)}.jpg`, {
     method: 'PUT',
     headers: { 'Content-Type': 'image/jpeg' },
