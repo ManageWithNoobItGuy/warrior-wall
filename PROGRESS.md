@@ -1,4 +1,11 @@
-# Progress — 26 August 2026
+# Progress
+
+An engineering journal, newest entry last. The README is the document to trust for how
+the app works today; this file records how it got there and what was learned on the way.
+
+---
+
+# 26 August 2026
 
 Merged the combat and character systems from **RPG-Seminar** into **AI Warrior Wall of
 Pledging**, and deployed to the `first-wongs` Cloudflare account at
@@ -158,3 +165,97 @@ stats accumulate across the gaps and the battle can run whenever.
 - **Nothing is committed to git yet.** About 5,000 new lines — `lib/rpg/`,
   `worker/game.js`, four client modules, the class artwork, and `tests/` — plus 18
   modified files.
+
+
+---
+
+# 27–28 August 2026 — taught, then hardened
+
+The app was used with a real class, and most of this came out of watching it fail in
+front of one.
+
+## The pledge moved twice
+
+It began available from the moment a character existed, which pulled students out of the
+lesson to write takeaways while questions were still being asked. It was gated behind the
+battle — which fixed that and immediately created a worse problem: a class that runs no
+tournament could not reach the wall at all, and a bracket needs two fighters, so a small
+class could not have one even in principle.
+
+It now waits for **OPEN PLEDGING** on the wall. The instructor picks the moment, every
+phone goes at once, and the room is not obliged to have fought. `pledgeOpen` is a flag
+rather than a phase, because pledging runs alongside whatever the arena is doing.
+
+Making the middle version work needed an end-of-battle signal the phones could trust.
+`done` had been in `PHASES` from the start but nothing ever set it — each screen worked
+the ending out from `startedAt + totalMs`, which draws a view but gives a page nothing to
+react to. The room now sets a Durable Object alarm and broadcasts `phase`.
+
+## Bugs found by teaching with it
+
+| Bug | Why it happened |
+| --- | --- |
+| A summoned avatar never appeared in the class preview | `#preview-art` was written in exactly one place, inside `markClass()`, so it only changed when the *class* changed |
+| The character sheet showed a stale portrait | `/av/<id>.jpg` is one URL for every version of a face; the browser served what it had cached, and nothing was broadcast when a new one landed. Portraits are versioned `?v=<portraitAt>` now |
+| A thief wearing cleric robes | A student may change class after summoning, and the painting did not change with them. The avatar now belongs to the class it was painted as |
+| Scan lines across every face | A z-index list lifts artwork above the CRT overlay; `.sheet-portrait img` was never in it. Measured: 25 levels of banding, now 0 |
+| Portraits soft on every screen | Uploaded at 256px, drawn at up to 344 real pixels. Now 512 |
+| PARTY MEMBERS empty all lesson | It listed pledge cards only, which stopped making sense the moment the pledge moved after the battle |
+| "2 of 2 have not picked a stance" while the HUD said 2/2 | The `stanceCount` event repainted one number without updating the model the warning is computed from |
+| The projector abandoned the arena the instant a battle ended | `GAME_VIEWS` never listed `done`, so the champion banner was being shown to nobody |
+
+The last two are the same shape as the `/api/game/leave` routing bug: something reads a
+copy of state that nothing keeps current. Worth looking for first next time.
+
+## Added
+
+Party member management (rename, remove — taking character, portrait and card together),
+a student's own two-step delete gated before the battle, a FINAL RESULTS board showing
+arena and quiz standings side by side, a question chooser so any question can be opened
+out of order, and arena sound.
+
+## Balance, re-measured
+
+2,000 rooms rather than the 300 recorded above:
+
+```
+champion came from the better-answering half   96.0%   (chance: 50%)
+champion was the single best answerer          27.3%   (chance: 4.2%)
+quiz rank vs finishing rank (Spearman)         0.441
+```
+
+The single-best-answerer figure moves with class size — 47.6% at eight students, 15.8% at
+forty-eight — but the *edge over chance* rises as the room grows.
+
+## The champion scene was too slow
+
+From the last blow to the results board was 32.6 seconds, most of it reading out places.
+Halved to 18.0s. The fighting itself, including the deliberately slow final duel, is
+untouched.
+
+## Testing lessons, all of them paid for
+
+- **Assertions that pass for the wrong reason are the norm, not the exception.** Three
+  separate ones here: `elementFromPoint` cannot see a `::after` pseudo-element, so a
+  scan-line check passed with stripes fully visible; a 414px viewport made a 256px
+  portrait "high enough resolution"; and counting sounds passed with the reconnect guard
+  removed. Each had to be rewritten to measure the thing itself — screenshot pixels,
+  the widest frame the CSS allows, oscillator frequencies.
+- **Never run two test runs at once.** They share a Chrome debug port and the local
+  database. Doing so produced four convincing false failures.
+- **Chrome throttles `requestAnimationFrame` in a background tab.** A second projector
+  opened to test reconnection silently froze the first one, which was the thing under
+  test.
+- **`wrangler dev` dies under long SSE connections**, with `Error inside ProxyWorker:
+  Network connection lost.` Reproducible on unmodified code by polling from a page that
+  holds an event stream. A suite reporting `NO RESULT` usually means the server went
+  away, not that the code is wrong — check before believing it.
+
+## Still not done
+
+- **Two live classes at once.** Each class has its own room, but the student link
+  resolves to whichever class is active, so both groups land in the same one.
+- **Characters do not carry across classes.** By decision.
+- **A student ID is still an identity, not a credential.** Anyone willing to type a
+  classmate's ID can play as them. If these scores ever count for marks, the token in
+  `join` has to become a real credential.
