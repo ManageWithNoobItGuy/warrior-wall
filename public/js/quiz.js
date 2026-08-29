@@ -34,16 +34,25 @@ export async function initQuiz() {
       gm.reveal = payload;
       loadGame().then(render);
     },
+    // These three repaint one number rather than re-rendering the panel, which
+    // is what keeps a counter ticking up from restarting the question's
+    // entrance animation. The model has to move with the text: it is what the
+    // START BATTLE warning is computed from, and a stale copy of it told an
+    // instructor that nobody had picked a stance while the HUD beside it said
+    // everybody had.
     answered: ({ count, total }) => {
+      if (gm.game) Object.assign(gm.game, { answered: count, players: total });
       el('gm-answered').textContent = `${count} / ${total}`;
     },
     stanceCount: ({ picked, total }) => {
+      if (gm.game) Object.assign(gm.game, { stancePicked: picked, players: total });
       el('gm-stances').textContent = `${picked} / ${total}`;
     },
     stance: () => loadGame().then(render),
     battle: () => loadGame().then(render),
     phase: () => loadGame().then(render),
     roster: ({ count }) => {
+      if (gm.game) gm.game.players = count;
       el('gm-players').textContent = count;
     },
     gameReset: () => loadGame().then(render),
@@ -354,6 +363,9 @@ el('gm-pledge').addEventListener('click', async () => {
 });
 
 el('gm-battle').addEventListener('click', async () => {
+  // Asked in front of a class, and wrong is worse than slow: read the room
+  // rather than trusting whatever the last event left behind.
+  await loadGame().catch(() => {});
   const unpicked = (gm.game.players ?? 0) - (gm.game.stancePicked ?? 0);
   if (unpicked > 0) {
     const go = await askConfirm({
