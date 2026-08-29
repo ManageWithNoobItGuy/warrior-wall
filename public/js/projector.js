@@ -89,7 +89,7 @@ async function syncGame(revealPayload) {
 const GAME_VIEWS = new Set(['question', 'reveal', 'stance', 'battle', 'done']);
 
 /** How long the champion keeps the battlefield before the board takes over. */
-const CHAMPION_DWELL = 7000;
+const CHAMPION_DWELL = 4000;
 let resultsAt = 0;
 
 function paint() {
