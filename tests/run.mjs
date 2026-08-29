@@ -48,23 +48,50 @@ const files = (await readdir(join(here, 'browser')))
 
 await seedFixtures();
 
-let failed = 0;
-for (const file of files) {
-  const name = file.replace(/\.mjs$/, '');
-  const code = await new Promise((ok) => {
+/** Runs one suite to completion and reports what it said. */
+function runSuite(file) {
+  return new Promise((ok) => {
     const p = spawn('node', [join(here, 'browser', file)], { stdio: ['ignore', 'pipe', 'pipe'] });
     let out = '';
     p.stdout.on('data', (d) => (out += d));
     p.stderr.on('data', (d) => (out += d));
-    p.on('close', (c) => {
-      const verdict = out.match(/ALL CHECKS PASSED|FAILED[: ]+\d+/)?.[0] ?? 'NO RESULT';
-      const pass = verdict === 'ALL CHECKS PASSED';
-      console.log(`${pass ? '  ok  ' : '  FAIL'}  ${name.padEnd(30)} ${verdict}`);
-      if (!pass) console.log(out.split('\n').filter((l) => l.includes('✗')).join('\n'));
-      ok(pass ? 0 : 1);
+    p.on('close', () => {
+      ok({ verdict: out.match(/ALL CHECKS PASSED|FAILED[: ]+\d+/)?.[0] ?? 'NO RESULT', out });
     });
   });
-  failed += code;
+}
+
+let failed = 0;
+for (const file of files) {
+  const name = file.replace(/\.mjs$/, '');
+  let result = await runSuite(file);
+
+  /**
+   * A suite that dies without printing a verdict has usually lost its DevTools
+   * connection, not found a bug: cdp.mjs puts a 15s deadline on every call, and
+   * across a full run one of them occasionally never gets its reply. It moves
+   * between suites from run to run, which is the tell.
+   *
+   * So NO RESULT is retried once. A real failure says the same thing twice; a
+   * stall does not, and a phantom failure in a thirty-suite run costs whoever
+   * is reading it more than the minute this spends.
+   */
+  const stalled = result.verdict === 'NO RESULT';
+  if (stalled) result = await runSuite(file);
+
+  const pass = result.verdict === 'ALL CHECKS PASSED';
+  const note = stalled ? (pass ? '  (passed on retry after a stall)' : '  (twice)') : '';
+  console.log(`${pass ? '  ok  ' : '  FAIL'}  ${name.padEnd(30)} ${result.verdict}${note}`);
+  if (!pass) {
+    // The whole output when there is no verdict — the stack trace is the only
+    // thing that says why, and filtering for ✗ throws it away.
+    console.log(
+      result.verdict === 'NO RESULT'
+        ? result.out
+        : result.out.split('\n').filter((l) => l.includes('✗')).join('\n'),
+    );
+  }
+  failed += pass ? 0 : 1;
 }
 
 console.log(failed ? `\n${failed} of ${files.length} suites failed` : `\nall ${files.length} suites passed`);
