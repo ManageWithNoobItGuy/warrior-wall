@@ -53,10 +53,10 @@ try {
   // that the helper normally exists to answer never fires.
   const a = await openPage(`${B}/`, { fresh: true, autoDialog: false });
   await sleep(2400);
-  await makeCharacter(a, '7501', 'Anucha Wong', 'warrior');
+  await makeCharacter(a, '7501', 'Rename Tester', 'warrior');
   const b = await openPage(`${B}/`, { fresh: true });
   await sleep(2400);
-  await makeCharacter(b, '7502', 'Bua Chan', 'mage');
+  await makeCharacter(b, '7502', 'Remove Tester', 'mage');
 
   // autoDialog off: the helper's auto-accept clicks [data-ok] every 120ms,
   // which would close the RENAME dialog before anything could be typed into it.

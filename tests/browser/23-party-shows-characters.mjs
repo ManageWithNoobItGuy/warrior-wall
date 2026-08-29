@@ -37,7 +37,7 @@ try {
   await sleep(2400);
   await stu.evaluate(`
     document.getElementById('student-id').value='7001';
-    document.getElementById('name').value='Kritsada Pha';
+    document.getElementById('name').value='Party Tester';
     document.querySelector('[data-step="0"] [data-next]').click();`);
   await sleep(1300);
   await stu.evaluate(`(async()=>{
@@ -63,7 +63,7 @@ try {
   ok(after.characters === 1, `one member tile (${after.characters})`);
   ok(after.cards === 0, `and no card yet (${after.cards})`);
   ok(after.count === '1', `the header counts them (${after.count})`);
-  ok(after.names[0] === 'Kritsada Pha', `named on the tile: ${after.names[0]}`);
+  ok(after.names[0] === 'Party Tester', `named on the tile: ${after.names[0]}`);
   ok(after.jobs[0] === 'KNIGHT', `class shown: ${after.jobs[0]}`);
 
   // ---- the portrait must not be striped by the CRT overlay
@@ -92,7 +92,7 @@ try {
   await sleep(2400);
   await stu2.evaluate(`
     document.getElementById('student-id').value='7002';
-    document.getElementById('name').value='Napat Sri';
+    document.getElementById('name').value='Party Tester Two';
     document.querySelector('[data-step="0"] [data-next]').click();`);
   await sleep(1300);
   await stu2.evaluate(`document.querySelector('[data-step="1"] [data-next]').click()`);
@@ -106,7 +106,7 @@ try {
   console.log('\n=== a second character');
   ok(two.characters === 2, `both are listed (${two.characters})`);
   ok(two.count === '2', `header keeps up (${two.count})`);
-  ok(two.names.includes('Napat Sri'), `second name present: ${two.names.join(', ')}`);
+  ok(two.names.includes('Party Tester Two'), `second name present: ${two.names.join(', ')}`);
   await wall.screenshot((process.env.SHOT_DIR ?? '/tmp') + '/party-members.png');
 
   for (const e of [...errors(wall.logs),...errors(stu.logs)].filter(x=>!x.text.includes('404')))
